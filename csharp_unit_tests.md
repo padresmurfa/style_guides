@@ -66,19 +66,25 @@ The following sections are defined for a structured test. Where possible, the or
 1. **GIVEN**  
    - Set up initial conditions and inputs.
    - Assign variables with the prefix `given_`.
+   - when test fixtures are used, they should be allocated in this section
    - **Test Fixtures** should be named `Fixture_*` and assigned to `given_*` variables.
+   - The GIVEN section should always be the first section in a test, unless there is nothing to define in GIVEN, in which case it should be omitted.
+
+1. **SETUP**
+   - perform all test initialization that prepares the non-mocked environment (e.g., creating HttpContext, configuring dependency injection, and setting up request parameters)
+   - variables created in this section should be prefixed with `env_*` (e.g. env_httpContext, env_actionContext)
+   - when constants or variables are needed in this section that are important for the overall comprehensibility of the test, they should be declared in variables in the GIVEN section instead
+   - the SETUP section should follow the GIVEN section, unless there is nothing to setup in SETUP, in which case it should be omitted
+   - the SETUP section should not refer to mock_ variables. If it needs to do so, and this cannot be solved by moving mocked setup into the MOCKING section, then consider moving the MOCKING section above the SETUP section
 
 1. **MOCKING**
    - Define and configure **mock objects**.
    - Mock variables must be named `mock_*`.
    - **Use constructor injection for dependencies**, or use mocking frameworks like Moq.
-
-1. **SETUP**
-   - perform all test initialization that prepares the non-mocked environment (e.g., creating HttpContext, configuring dependency injection, and setting up request parameters)
-   - variables created in this section should be prefixed with `env_*` (e.g. env_httpContext, env_actionContext)
+   - The MOCKING section should follow the SETUP section, or be omitted if no mocking is required. Under special circumstances described above, it may be placed before the SETUP section.
 
 1. **SYSTEM UNDER TEST**  
-   - Assigns the system under test to a variable named sut
+   - Assigns the system under test to a variable named `sut`
    - if multiple systems are being tested for some reason, assign them to separate`sut_*` variables.
 
 1. **WHEN**  
@@ -124,10 +130,13 @@ public void Test_ProcessData_ReturnsCorrectValue()
 
 ---
 
-## **4. Mocking Best Practices**
-- **Use Moq or built-in mocking frameworks** for dependency injection.
+## **4. Mocking & Fixtures: Best Practices**
+- **Prefer fixtures over mocks**- preferring to use shared, reusable fixtures rather than creating one-off test data. When using fixtures, instantiate the fixture in the GIVEN section, and modify it as needed to fit the test's needs. Fixtures help keep your tests DRY and consistent, and allows them to work on more accurate test data.
 - **Never mock what you don't have to**—prefer real instances where practical.
+- **Only mock things that the system-under-test uses directly**-this ensures that your test exercises the SUT properly, without falling into the trap of combinatorial execution path counts as call-depth increases. The systems that your SUT uses directly should be covered by their own direct unit tests. There is no excuse for untested code in the era of AI assisted coding.
+- **Use Moq or built-in mocking frameworks** for dependency injection.
 - **Assertions on mock interactions go in the BEHAVIOR section**.
+
 
 ✅ **Good Example:**
 ```csharp
@@ -170,6 +179,7 @@ public void Test_ServiceCallsDependency()
 - **It is acceptable to assert against `mock_*` variables directly in the BEHAVIOR section** .
 - To reiterate: **Never assert directly against given_* or env_* variable** — always use the `expected_*` or `actual_*` variables in the THEN section.
 - To reiterate: **This also holds true for mocks** — always use the `expected_*` or `actual_*` variables in the BEHAVIOR section when asserting on the behavior of mock objects, which must be named `mock_*`.
+- To reiterate once more: assertions should never ever ever refer to `given_*` or `env_*` values, and should only refer to `mock_*` variables in the BEHAVIOR section.
 
 ✅ **Good Example:**
 ```csharp
