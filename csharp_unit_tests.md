@@ -418,6 +418,7 @@ namespace Services.ServicesTests // ❌ do not increase the indent for namespace
 - **Each test class should be commented with a human-readable explanation of what the test class is exercising**
 - **Use the XML comment syntax to comment test classes and test methods**
 - **Use comments to explain complex mocking setups and behavior checks**
+- **As a best practice, add comments to section headers, explaining the contents of the section**
 
 ✅ **Good Example:**
 ```csharp
@@ -435,25 +436,27 @@ public class UserServiceTests
     [Fact]
     public void Test_FooBar_IsFoo()
     {
-        // MOCKING
+        // MOCKING: create a mocked logger that has info level enabled
         Mock<ILogger<UserService>> mockLogger = new Mock<ILogger<UserService>>();
         mockLogger.Setup(l => l.IsEnabled(LogLevel.Information)).Returns(true);
 
-        // SETUP
+        // SETUP: hide the fact that we're using a mocked logger
         ILogger<UserService> envLogger = mockLogger.Object;
 
-        // SYSTEM UNDER TEST
+        // SYSTEM UNDER TEST: instantiate and initialize the system under test
         UserService sut = new UserService(envLogger);
 
-        // WHEN
+        // WHEN: exercise the test case
         bool actualResult = sut.IsFoo();
 
-        // EXPECTATIONS
+        // EXPECTATIONS: we expect a log message to have been emitted, and the result to be true
         string expectedLogMessageFragment = "IsFoo was called";
+        bool expectedResult = true;
 
-        // BEHAVIOR
+        // THEN: Verify that the actual status code and result match expectations.
+        Assert.Equal(expectedResult, actualResult);
 
-        // we expect IsFoo to log a message on info level
+        // BEHAVIOR: we expect IsFoo to have logged a message on info level
         mockLogger.Verify(
             log => log.Log(
                 It.Is<LogLevel>(l => l == LogLevel.Information),
