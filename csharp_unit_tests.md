@@ -87,9 +87,13 @@ Tests/
 ## **4. Test Structure**
 Each test method follows a structured format, **separated by clear comments**:
 
+- Where possible, the order of sections should be as it is presented below.
+- Empty sections should be omitted.
+- In some cases, it may be justifiable to have multiple instances of specific sections
+
 ### **Standard Sections:**
 
-The following sections are defined for a structured test. Where possible, the order of sections should be as it is presented below. Empty sections should be omitted. In rare cases, it may be justifiable to merge sections, using combined names such as *MOCKING % SETUP*, but try to avoid this.
+The following sections are defined for a well structured test.
 
 1. **GIVEN**
    - Set up initial conditions and inputs.
@@ -97,42 +101,50 @@ The following sections are defined for a structured test. Where possible, the or
    - when test fixtures are used, they should be allocated in this section
    - **Test Fixture classes** should be named `Fixture*` and assigned to `given*` variables prior to use.
    - The GIVEN section should always be the first section in a test, unless there is nothing to define in GIVEN, in which case it should be omitted.
+   - **The GIVEN section must not be merged with any other section**
 
 1. **SETUP**
    - perform all test initialization that prepares the non-mocked environment (e.g., creating HttpContext, configuring dependency injection, and setting up request parameters)
    - variables created in this section should be prefixed with `env*` (e.g. envHttpContext, envActionContext)
    - when constants or variables are needed in this section that are important for the overall comprehensibility of the test, they should be declared in variables in the GIVEN section instead
    - the SETUP section should follow the GIVEN section, unless there is nothing to setup in SETUP, in which case it should be omitted
-   - the SETUP section should not refer to `mock*` variables. If it needs to do so, and this cannot be solved by moving mocked setup into the MOCKING section, then consider moving the MOCKING section above the SETUP section
+   - the SETUP section should refer to GIVEN variables, not `mock*` variables, except in rare occasions
+   - **The SETUP section must not be merged with any other section**
 
 1. **MOCKING**
    - Define and configure **mock objects**.
    - Mock variables must be named `mock*`.
    - **Use constructor injection for dependencies**, or use mocking frameworks like Moq.
    - The MOCKING section should follow the SETUP section, or be omitted if no mocking is required. Under special circumstances described above, it may be placed before the SETUP section.
+   - **The MOCKING section must not be merged with any other section**
 
 1. **SYSTEM UNDER TEST**
    - Assigns the system under test to a variable named `sut`
    - if multiple systems are being tested for some reason, assign them to separate`sut*` variables.
+   - **The SYSTEM UNDER TEST section must not be merged with any other section**
 
 1. **WHEN**
    - Perform the action or method call being tested.
    - Assign the result to `actual*` variables.
    - If the test needs to use an `env*` in later sections, then assign them to `actual*` variables in WHEN and use those instead.
+   - **The WHEN section must not be merged with any other section**
 
 1. **EXPECTATIONS**
    - Define expected values **before assertions**.
    - Expected values must be assigned to `expected*` variables.
    - The EXPECTATIONS section should be strictly placed after WHEN and before THEN
    - This section should not refer to any `actual*` variables
+   - **The EXPECTATIONS section must not be merged with any other section**
 
 1. **THEN**
    - Perform **assertions** comparing actual results to expected values.
    - **Never assert against literals**—always use `expected*` variables.
+   - **The THEN section must not be merged with any other section**
 
 1. **BEHAVIOR**
    - Contains assertions for **mock interactions** (e.g., `mockService.Verify(x => x.DoSomething(), Times.Once());`).
    - This section **must be present if mocks are used**.
+   - **The BEHAVIOR section must not be merged with any other section**
 
 ✅ **Good Example:**
 ```csharp
@@ -159,13 +171,110 @@ public void Test_ProcessData_ReturnsCorrectValue()
 
 ---
 
-## **5. Mocking & Fixtures: Best Practices**
-- **Prefer fixtures over mocks**- preferring to use shared, reusable fixtures rather than creating one-off test data. When using fixtures, instantiate the fixture in the GIVEN section, and modify it as needed to fit the test's needs. Fixtures help keep your tests DRY and consistent, and allows them to work on more accurate test data.
-- **Never mock what you don't have to**—prefer real instances where practical.
-- **Only mock things that the system-under-test uses directly**-this ensures that your test exercises the SUT properly, without falling into the trap of combinatorial execution path counts as call-depth increases. The systems that your SUT uses directly should be covered by their own direct unit tests. There is no excuse for untested code in the era of AI assisted coding.
-- **Use Moq or built-in mocking frameworks** for dependency injection.
-- **Assertions on mock interactions go in the BEHAVIOR section**.
+## **5. Fixtures: Best Practices**
+- **Prefer fixtures over mocks**- preferring to use shared, reusable fixtures rather than creating one-off test data. Fixtures help keep your tests DRY and consistent, and allows them to work on more accurate test data.
+- **Instantiate fixtures in the appropriate section** e.g. GIVEN or SETUP, and modify it as needed to fit the test's needs.
+- **Use a sharable fixture factory** instead of creating fixtures or complex test data inline
 
+✅ **Good Example:**
+```csharp
+
+public static class Fixtures {
+
+    public static string IpAddress()
+    {
+        return "192.168.1.1";
+    }
+
+    public static CwConfig CwConfig()
+    {
+        return new CwConfig { Terminals = new List<HardwareTerminalConfig>() };
+    }
+
+    public static CwGetTerminalConfigCommand CwGetTerminalConfigCommand()
+    {
+        string givenIpAddress = IpAddress();
+        return new CwGetTerminalConfigCommand { TerminalFixedIpAddress = givenIpAddress };
+    }
+
+    public static CommandContext<CwGetTerminalConfigCommand, CwGetTerminalConfigResult> CommandContext()
+    {
+        return new CommandContext<CwGetTerminalConfigCommand, CwGetTerminalConfigResult>
+        {
+            Command = CwGetTerminalConfigCommand()
+        };
+    }
+}
+
+public class CarWashesServiceTests
+{
+    [Test]
+    public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExist()
+    {
+        // GIVEN
+        var givenTerminalIp = Fixtures.IpAddress();
+        var givenCommandContext = Fixtures.CommandContext();
+        var givenCarWashesConfig = Fixtures.CwConfig();
+
+        // SYSTEM UNDER TEST
+        var sut = new CarWashesService();
+
+        // WHEN
+        await sut.GetTerminalConfig(givenCommandContext);
+        var actualStatusCode = givenCommandContext.StatusCode;
+        var actualResult = givenCommandContext.Result;
+
+        // EXPECTATIONS
+        var expectedStatusCode = HttpStatusCode.NotFound;
+        CwGetTerminalConfigResult expectedResult = null;
+
+        // THEN
+        Assert.Equal(expectedStatusCode, actualStatusCode);
+        Assert.Equal(expectedResult, actualResult);
+    }
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+[Test]
+public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExist()
+{
+    // GIVEN
+    var givenTerminalIp = "192.168.1.1";
+    var givenCommandContext = new CommandContext<CwGetTerminalConfigCommand, CwGetTerminalConfigResult>
+    {
+        Command = new CwGetTerminalConfigCommand { TerminalFixedIpAddress = givenTerminalIp }
+    };
+    var givenCarWashesConfig = new CwConfig { Terminals = new List<HardwareTerminalConfig>() };
+    StaticConfig.CarWashesConfig = givenCarWashesConfig;
+
+    // SYSTEM UNDER TEST
+    var sut = new CarWashesService();
+
+    // WHEN
+    await sut.GetTerminalConfig(givenCommandContext);
+    var actualStatusCode = givenCommandContext.StatusCode;
+    var actualResult = givenCommandContext.Result;
+
+    // EXPECTATIONS
+    var expectedStatusCode = HttpStatusCode.NotFound;
+    CwGetTerminalConfigResult expectedResult = null;
+
+    // THEN
+    Assert.Equal(expectedStatusCode, actualStatusCode);
+    Assert.Equal(expectedResult, actualResult);
+}
+```
+
+---
+
+## **6. Mocking: Best Practices**
+- **Never mock what you don't have to**—prefer fixtures or real instances where practical.
+- **Only mock things that the system-under-test uses directly**-this ensures that your test exercises the SUT properly, without falling into the trap of combinatorial execution path counts as call-depth increases.
+- The systems that your SUT uses directly should be covered by their own direct unit tests, not by the unit tests of your SUT.
+- **Use Moq or built-in mocking frameworks** for dependency injection.
+- **Assertions on mock interactions go in the BEHAVIOR section, not in the THEN section**.
 
 ✅ **Good Example:**
 ```csharp
@@ -198,7 +307,7 @@ public void Test_ServiceCallsDependency()
 
 ---
 
-## **6. Assertions & Variable Naming**
+## **7. Assertions & Variable Naming**
 - **Expected values** always assign input values (from the GIVEN section) to `expected*` variables in the EXPECTATIONS section if you intend to assert on them in the THEN or BEHAVIOR sections.
 - **Actual results** all actual results must be assigned to `actual*` variables in the WHEN section.
 - **Never assert against literals directly** — use `expected*` variables.
@@ -222,7 +331,7 @@ Assert.AreEqual(42, actualResult); // ❌ No expected variable
 
 ---
 
-## **7. Exception Handling (`Assert.Throws`)**
+## **8. Exception Handling (`Assert.Throws`)**
 
 When using a mechanism such as Assert.Throws, which places the exception name that is being asserted against
 above the code block that exercises the system under test.
@@ -251,8 +360,8 @@ public void Test_DivideByZero_ThrowsException()
 
 ---
 
-## **8. Using `[SetUp]` Methods**
-- **Avoid `[SetUp]` for simple tests.**
+## **9. Using `[SetUp]` Methods**
+- **Avoid `[SetUp]`**. Favor using sharable fixtures, declared in a static fixture factory class, instead.
 - Use `[SetUp]` only for **repeated initialization**.
 
 ✅ **Good Example:**
@@ -274,19 +383,101 @@ public void Setup()
 
 ---
 
-## **9. Organizing Tests in Namespaces**
+## **10. Organizing Tests in Namespaces**
 - **Group related test classes into namespaces**.
 - Ensure **each namespace matches the SUT structure**.
+- use the 'namespace <name>;' form rather than the 'namespace <name> {}' form.
 
 ✅ **Good Example:**
 ```csharp
-namespace Tests.Services
+namespace Tests.ServicesTests;
+
+public class UserServiceTests { ... }
+```
+
+🚫 **Bad Example:**
+```csharp
+namespace Services.Tests; // ❌ Inconsistent naming
+
+public class UserServiceTests { ... }
+```
+
+🚫 **Bad Example:**
+```csharp
+namespace Services.ServicesTests // ❌ do not increase the indent for namespaces
 {
-    [TestFixture]
     public class UserServiceTests { ... }
 }
 ```
+
+---
+
+## **11. Using comments in tests **
+
+- **Each test method should be commented with a human-readable explanation of what the test is exercising**
+- **Each test class should be commented with a human-readable explanation of what the test class is exercising**
+- **Use the XML comment syntax to comment test classes and test methods**
+- **Use comments to explain complex mocking setups and behavior checks**
+
+✅ **Good Example:**
+```csharp
+namespace Tests.ServicesTests;
+
+/// <summary>
+/// Covers the 'Bar' region of the 'Foo.User.Service' class
+/// </summary>
+public class UserServiceTests
+{
+
+    /// <summary>
+    /// Covers the case where FooBar == "foo"
+    /// </summary>
+    [Fact]
+    public void Test_FooBar_IsFoo()
+    {
+        // MOCKING
+        Mock<ILogger<UserService>> mockLogger = new Mock<ILogger<UserService>>();
+        mockLogger.Setup(l => l.IsEnabled(LogLevel.Information)).Returns(true);
+
+        // SETUP
+        ILogger<UserService> envLogger = mockLogger.Object;
+
+        // SYSTEM UNDER TEST
+        UserService sut = new UserService(envLogger);
+
+        // WHEN
+        bool actualResult = sut.IsFoo();
+
+        // EXPECTATIONS
+        string expectedLogMessageFragment = "IsFoo was called";
+
+        // BEHAVIOR
+
+        // we expect IsFoo to log a message on info level
+        mockLogger.Verify(
+            log => log.Log(
+                It.Is<LogLevel>(l => l == LogLevel.Information),
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains(expectedLogMessageFragment)),
+                null,
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()
+            ),
+            Times.Once,
+            $"Expected an '{expectedLogMessageFragment}' log entry."
+        );
+    }
+}
+```
+
 🚫 **Bad Example:**
 ```csharp
-namespace Services.Tests // ❌ Inconsistent naming
+namespace Services.Tests; // ❌ Inconsistent naming
+
+public class UserServiceTests
+{
+    [Fact]
+    public void Test_FooBar_IsFoo()
+    {
+    }
+}
 ```
