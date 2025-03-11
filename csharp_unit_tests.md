@@ -96,6 +96,7 @@ The following sections are defined for a structured test. Where possible, the or
    - Define expected values **before assertions**.
    - Expected values must be assigned to `expected_*` variables.
    - The EXPECTATIONS section should be strictly placed after WHEN and before THEN
+   - This section should not refer to any `actual_*` variables
 
 1. **THEN**  
    - Perform **assertions** comparing actual results to expected values.
