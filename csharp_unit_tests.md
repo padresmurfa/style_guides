@@ -141,6 +141,14 @@ The following sections are defined for a well structured test.
    - **Never assert against literals**—always use `expected*` variables.
    - **The THEN section must not be merged with any other section**
 
+1. **LOGGING**
+   - Verify any behavior that can be validated via captured logging operations.
+   - Log the behavior of the code under test at appropriate levels (including trace-level logging with extensive details).
+   - In unit tests, assert against log entries in the LOGGING section to confirm that the intended execution branch was exercised.
+   - **Prefer asserting on emitted logs over (or in addition to) mock verifications** whenever possible: log-based assertions are simpler to write and review, and often replace complex mock setups (e.g., capturing parameters).
+   - Each unit test should explicitly verify that the execution branch it is meant to cover is taken, reducing false positives when setup does not exercise the desired branch.
+
+
 1. **BEHAVIOR**
    - Contains assertions for **mock interactions** (e.g., `mockService.Verify(x => x.DoSomething(), Times.Once());`).
    - This section **must be present if mocks are used**.
@@ -275,6 +283,7 @@ public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExis
 - The systems that your SUT uses directly should be covered by their own direct unit tests, not by the unit tests of your SUT.
 - **Use Moq or built-in mocking frameworks** for dependency injection.
 - **Assertions on mock interactions go in the BEHAVIOR section, not in the THEN section**.
+- **Prefer verifying log output over (or in addition to) mock verifications**—capturing and asserting on log entries is usually easier to implement correctly, more readable for future maintainers, and often avoids the “gnarly” setup required to capture mock parameters.
 
 ✅ **Good Example:**
 ```csharp
@@ -412,13 +421,15 @@ namespace Services.ServicesTests // ❌ do not increase the indent for namespace
 
 ---
 
-## **11. Using comments in tests **
+## **11. Using comments in tests**
 
 - **Each test method should be commented with a human-readable explanation of what the test is exercising**
 - **Each test class should be commented with a human-readable explanation of what the test class is exercising**
 - **Use the XML comment syntax to comment test classes and test methods**
-- **Use comments to explain complex mocking setups and behavior checks**
-- **As a best practice, add comments to section headers, explaining the contents of the section**
+
+## **12. Increasing test clarity with section comments**
+
+**As a best practice**, when tests have complex parts such as setting up mocks, creating complex 'given' objects, asserting on mock behavior, and so forth, it is recommended to split each such part into a section of its own, and comment what that section is doing
 
 ✅ **Good Example:**
 ```csharp
@@ -436,9 +447,12 @@ public class UserServiceTests
     [Fact]
     public void Test_FooBar_IsFoo()
     {
+        // GIVEN: LogLevel.Information is enabled
+        bool givenInfoLevelEnabled = true;
+
         // MOCKING: create a mocked logger that has info level enabled
         Mock<ILogger<UserService>> mockLogger = new Mock<ILogger<UserService>>();
-        mockLogger.Setup(l => l.IsEnabled(LogLevel.Information)).Returns(true);
+        mockLogger.Setup(l => l.IsEnabled(LogLevel.Information)).Returns(givenInfoLevelEnabled);
 
         // SETUP: hide the fact that we're using a mocked logger
         ILogger<UserService> envLogger = mockLogger.Object;
@@ -449,8 +463,10 @@ public class UserServiceTests
         // WHEN: exercise the test case
         bool actualResult = sut.IsFoo();
 
-        // EXPECTATIONS: we expect a log message to have been emitted, and the result to be true
+        // EXPECTATION: we expect a log message to have been emitted
         string expectedLogMessageFragment = "IsFoo was called";
+
+        // EXPECTATION: we expect the result of IsFoo to be true
         bool expectedResult = true;
 
         // THEN: Verify that the actual status code and result match expectations.
