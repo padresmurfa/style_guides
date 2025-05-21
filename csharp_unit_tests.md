@@ -103,29 +103,34 @@ The following sections are defined for a well structured test.
    - The GIVEN section should always be the first section in a test, unless there is nothing to define in GIVEN, in which case it should be omitted.
    - **The GIVEN section must not be merged with any other section**
 
+1. **MOCKING**
+   - Define and configure **mock objects**.
+   - Mock variables must be named `mock*`.
+   - **Use constructor injection for dependencies**, or use mocking frameworks like Moq.
+   - The MOCKING section should occur before the SETUP section, or be omitted if no mocking is required. Under special circumstances described above, it may be placed after the SETUP section.
+   - **The MOCKING section must not be merged with any other section**
+   -
+
 1. **SETUP**
    - perform all test initialization that prepares the non-mocked environment (e.g., creating HttpContext, configuring dependency injection, and setting up request parameters)
    - variables created in this section should be prefixed with `env*` (e.g. envHttpContext, envActionContext)
    - when constants or variables are needed in this section that are important for the overall comprehensibility of the test, they should be declared in variables in the GIVEN section instead
    - the SETUP section should follow the GIVEN section, unless there is nothing to setup in SETUP, in which case it should be omitted
    - the SETUP section should refer to GIVEN variables, not `mock*` variables, except in rare occasions
+   - Assign mock objects to real interface variables in the SETUP section, using the env* prefix (e.g., envLogger = mockLogger.Object). The mock variables themselves may only be used in the SETUP and BEHAVIOR sections.
    - **The SETUP section must not be merged with any other section**
-
-1. **MOCKING**
-   - Define and configure **mock objects**.
-   - Mock variables must be named `mock*`.
-   - **Use constructor injection for dependencies**, or use mocking frameworks like Moq.
-   - The MOCKING section should follow the SETUP section, or be omitted if no mocking is required. Under special circumstances described above, it may be placed before the SETUP section.
-   - **The MOCKING section must not be merged with any other section**
 
 1. **SYSTEM UNDER TEST**
    - Assigns the system under test to a variable named `sut`
    - if multiple systems are being tested for some reason, assign them to separate`sut*` variables.
+   - The SYSTEM UNDER TEST must never directly reference mock* variables. It must use the env* variables initialized in SETUP.
    - **The SYSTEM UNDER TEST section must not be merged with any other section**
 
 1. **WHEN**
    - Perform the action or method call being tested.
-   - Assign the result to `actual*` variables.
+   - Assign the results to `actual*` variables. This would typically be the return value received from invoking the system under test.
+     - If the test requires asserting against other results in the THEN section or BEHAVIOR section, then use the opportunity
+       to assign those results to their own `actual*` variables, e.g. after invoking the system under test.
    - If the test needs to use an `env*` in later sections, then assign them to `actual*` variables in WHEN and use those instead.
    - **The WHEN section must not be merged with any other section**
 
@@ -161,10 +166,12 @@ public void Test_ProcessData_ReturnsCorrectValue()
 {
     // GIVEN
     var givenInput = "sample";
-    var givenService = new DataService();
+
+    // SYSTEM UNDER TEST
+    var sut = new DataService();
 
     // WHEN
-    var actualResult = givenService.ProcessData(givenInput);
+    var actualResult = sut.ProcessData(givenInput);
     var actualSideEffect = Foo.Bar();
 
     // EXPECTATIONS
@@ -176,6 +183,21 @@ public void Test_ProcessData_ReturnsCorrectValue()
     Assert.AreEqual(expectedSideEffect, actualSideEffect);
 }
 ```
+
+🚫 **Bad Example:**
+```csharp
+[Test]
+public void Test_ProcessData_ReturnsCorrectValue()
+{
+    // MOCKING
+    Mock<IFoo> mockFoo = new();
+
+    // SYSTEM UNDER TEST
+    var sut = new DataService(mockFoo.Object);
+}
+```
+
+
 
 ---
 
@@ -283,6 +305,7 @@ public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExis
 - The systems that your SUT uses directly should be covered by their own direct unit tests, not by the unit tests of your SUT.
 - **Use Moq or built-in mocking frameworks** for dependency injection.
 - **Assertions on mock interactions go in the BEHAVIOR section, not in the THEN section**.
+- **Mocks must never be passed directly to the system under test.** Instead, assign mocks to interface-conforming env* variables in SETUP and pass those to the SUT.
 - **Prefer verifying log output over (or in addition to) mock verifications**—capturing and asserting on log entries is usually easier to implement correctly, more readable for future maintainers, and often avoids the “gnarly” setup required to capture mock parameters.
 
 ✅ **Good Example:**
@@ -292,7 +315,12 @@ public void Test_ServiceCallsDependency()
 {
     // GIVEN
     var mockDependency = new Mock<IDependency>();
-    var givenService = new MyService(mockDependency.Object);
+
+    // MOCKING
+    IDependency envDependency = mockDependency.Object;
+
+    // SYSTEM UNDER TEST
+    var givenService = new MyService(envDependency);
 
     // WHEN
     givenService.DoWork();
@@ -307,10 +335,10 @@ public void Test_ServiceCallsDependency()
 [Test]
 public void Test_ServiceCallsDependency()
 {
-    var mockDependency = new Mock<IDependency>();
-    var service = new MyService(mockDependency.Object);
+    var mockDependency = new Mock<IDependency>();  // ❌ No section-separators
+    var service = new MyService(mockDependency.Object); // ❌ passing the mock object directly to the SUT
     service.DoWork();
-    mockDependency.Verify(x => x.PerformTask(), Times.Once()); // ❌ No structured comments
+    mockDependency.Verify(x => x.PerformTask(), Times.Once());
 }
 ```
 
@@ -500,3 +528,14 @@ public class UserServiceTests
     }
 }
 ```
+
+---
+
+## **12. SETUP / SUT Dependency Rule **
+
+To re-iterate:
+
+- The **SETUP** section must initialize all dependencies passed to the **SUT** via `env*` variables.
+- The **SYSTEM UNDER TEST** section must construct the **SUT** using only `env*` variables.
+- Mocks must never be used directly in the **SYSTEM UNDER TEST** section.
+
