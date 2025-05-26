@@ -86,10 +86,11 @@ Tests/
 
 ## **4. Test Structure**
 Each test method follows a structured format, **separated by clear comments**:
-
 - Where possible, the order of sections should be as it is presented below.
 - Empty sections should be omitted.
 - In some cases, it may be justifiable to have multiple instances of specific sections
+- When a single **MOCKING** or **SETUP** block becomes large or involves multiple distinct steps, split it into smaller sub-sections with their own human-readable comment headers (e.g. `// SETUP: Configure HTTP client factory` and `// SETUP: Initialize environment variables`), so readers can quickly grasp each part.
+- Section comment headers should be written as full descriptive sentences (e.g. `// GIVEN: A valid context and wash code details`), not terse labels. If a section would contain only a trivial one-line line of code without setup complexity, you may omit its own comment.
 
 ### **Standard Sections:**
 
@@ -109,7 +110,7 @@ The following sections are defined for a well structured test.
    - **Use constructor injection for dependencies**, or use mocking frameworks like Moq.
    - The MOCKING section should occur before the SETUP section, or be omitted if no mocking is required. Under special circumstances described above, it may be placed after the SETUP section.
    - **The MOCKING section must not be merged with any other section**
-   -
+   - **If mocking logic itself has multiple responsibilities (e.g. creating fakes and configuring behaviors), split into sub-headers** (e.g. `// MOCKING: Create mock objects` and `// MOCKING: Configure mock responses`).
 
 1. **SETUP**
    - perform all test initialization that prepares the non-mocked environment (e.g., creating HttpContext, configuring dependency injection, and setting up request parameters)
@@ -119,6 +120,7 @@ The following sections are defined for a well structured test.
    - the SETUP section should refer to GIVEN variables, not `mock*` variables, except in rare occasions
    - Assign mock objects to real interface variables in the SETUP section, using the env* prefix (e.g., envLogger = mockLogger.Object). The mock variables themselves may only be used in the SETUP and BEHAVIOR sections.
    - **The SETUP section must not be merged with any other section**
+   - **If SETUP involves multiple distinct stages (e.g. reading fixtures, wiring dependencies, configuring environment), split into multiple sub-sections with descriptive comments.**
 
 1. **SYSTEM UNDER TEST**
    - Assigns the system under test to a variable named `sut`
@@ -370,12 +372,10 @@ Assert.AreEqual(42, actualResult); // ❌ No expected variable
 
 ## **8. Exception Handling (`Assert.Throws`)**
 
-When using a mechanism such as Assert.Throws, which places the exception name that is being asserted against
-above the code block that exercises the system under test.
-
-i.e.
-- **The THEN section should be placed before the WHEN section** when testing exceptions.
-- **Use `Assert.Throws` to verify expected exceptions.**
+When using a mechanism such as Assert.Throws to wrap the SUT invocation, the exception name that is being asserted against
+will be placed above the code block that exercises the system under test. In such cases, consider the Assert.Throws mechanism
+to be part of the WHEN section. Assign the actual exception to a local variable and assert that it is as expected in a
+subsequent THEN section
 
 ✅ **Good Example:**
 ```csharp
@@ -386,14 +386,12 @@ public void Test_DivideByZero_ThrowsException()
     var givenNumerator = 10;
     var givenDenominator = 0;
 
-    // THEN
-    Assert.Throws<DivideByZeroException>(() =>
+    // WHEN
+    DivideByZeroException actualException = Assert.Throws<DivideByZeroException>(() =>
     {
-        // WHEN
         Math.Divide(givenNumerator, givenDenominator);
     });
 }
-```
 
 ---
 
