@@ -160,6 +160,8 @@ The following sections are defined for a well structured test.
    - Contains assertions for **mock interactions** (e.g., `mockService.Verify(x => x.DoSomething(), Times.Once());`).
    - This section **must be present if mocks are used**.
    - **The BEHAVIOR section must not be merged with any other section**
+   - **All mocks must be created as verifiable**—either using `new Mock<T>(MockBehavior.Strict)` or by calling `.Verifiable()` on each `.Setup(...)`.
+   - **Every verifiable setup must be explicitly verified** in this section via `mock.Verify(...)` or `mock.VerifyAll()`. Unverified mocks should cause the test to fail.
 
 ✅ **Good Example:**
 ```csharp
@@ -308,7 +310,11 @@ public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExis
 - **Use Moq or built-in mocking frameworks** for dependency injection.
 - **Assertions on mock interactions go in the BEHAVIOR section, not in the THEN section**.
 - **Mocks must never be passed directly to the system under test.** Instead, assign mocks to interface-conforming env* variables in SETUP and pass those to the SUT.
-- **Prefer verifying log output over (or in addition to) mock verifications**—capturing and asserting on log entries is usually easier to implement correctly, more readable for future maintainers, and often avoids the “gnarly” setup required to capture mock parameters.
+- **Prefer verifying log output in addition to mock verifications**—capturing and asserting on log entries is usually easier to implement correctly, more readable for future maintainers, and often avoids the “gnarly” setup required to capture mock parameters.
+- **All mocks must be created in verifiable mode**:
+  - Use `new Mock<T>(MockBehavior.Strict)` to catch any unexpected calls, _or_
+  - Call `.Verifiable()` on each `mock.Setup(...)` you intend to verify.
+- **Every mock setup must be verified in the BEHAVIOR section** via `mock.Verify(...)` or `mock.VerifyAll()`; unverified verifiable mocks should fail the test.
 
 ✅ **Good Example:**
 ```csharp
