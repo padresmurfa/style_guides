@@ -12,13 +12,34 @@ These practices may be too detailed for human-written tests but serve as an exce
 
 ---
 
-## **1. Test Class Naming**
+## **1. Test Namespace Organization**
+Consistent namespaces make it immediately obvious where a test lives relative to the production code, so reviewers can locate the subject under test without opening multiple files. Misaligned namespaces cause confusion when navigating between source and tests, especially in IDEs that rely on namespace matching for discovery.
+- Every test file must declare a namespace that mirrors the production namespace and appends a `.Tests` suffix (e.g. `MyCompany.Products.Services` → `MyCompany.Products.Services.Tests`).
+- When the production code uses nested namespaces, mirror that structure exactly in the test namespace before adding `.Tests`.
+- Keep a **one-to-one mapping between folders and namespaces** so moving a file preserves the namespace.
+- Avoid combining test classes for different production namespaces under a single namespace—create separate namespaces instead.
+
+✅ **Good Example:**
+```csharp
+namespace MyCompany.Products.Services.Tests;
+```
+🚫 **Bad Example:**
+```csharp
+namespace Tests; // ❌ Does not mirror the production namespace
+```
+
+---
+
+## **2. Test Class Naming and Files**
 Consistent test class names make it immediately obvious which production code a suite exercises, so reviewers can trace failures quickly and spot coverage gaps. Without a naming convention teams waste time hunting for relevant tests, duplicate effort, and risk overlooking scenarios because responsibilities are spread across ambiguously labeled files.
-- Each test class **must end with** `Tests`.
+- Each test file must contain a single public test class whose name **ends with** `Tests`.
 - If a test class exercises a whole class and all of its methods, it must be named `<ClassName>Tests`.
 - If a test class exercises a single region within a class, it must be named `<ClassName><RegionName>Tests`.
 - If a test class exercises a single method within a class, it must be named `<ClassName><MethodName>Tests` or `<ClassName><RegionName><MethodName>Tests`.
 - Test class names should not contain underscores.
+- **Each test class should cover a single class, region, or method under test.**
+- **A test class' file name must be of the form `<ClassName>[<RegionName>][<MethodName>]Tests.cs`**, and every component of the file name must appear in the class name exactly once and in the same order.
+- Organize test files into folders that mirror the namespace to keep discovery tools and human navigation aligned.
 
 ✅ **Good Examples:**
 ```csharp
@@ -30,18 +51,41 @@ public class FileHandlerOpenTests()
 ```csharp
 public class FileHandler() // ❌ Missing Tests suffix
 public class FileHandlerWorksAsIntendedTests() // ❌ WorksAsIntended is not a plausible #region name
-public class FileHandlerInitializationAndHashingTests() // ❌ Must not combine multiple #regions into the same test class (at least not like this)
+public class FileHandlerInitializationAndHashingTests() // ❌ Combines multiple #regions into one class
 ```
 
 ---
 
-## **2. Test Method Naming**
+## **3. Region-Focused Test Classes**
+Regions describe cohesive areas of responsibility inside a production class. Mirroring those regions in the test suite keeps the feedback loop tight by ensuring every region has an intentionally scoped test class.
+- Only introduce a `<RegionName>` segment when the production code exposes a `#region` with the same PascalCase name.
+- When a class contains multiple regions, create a separate test class per region, following the naming rules above and keeping each class in its own file.
+- Do not reuse a `<RegionName>` segment across unrelated production regions; each region must map to a single test class.
+- If a region contains helper methods that are not directly invoked by the public API, test the public surface that exercises them rather than testing the region helpers directly.
+
+✅ **Good Example:**
+```
+Services/
+│── FileHandler.cs          // Contains regions Hashing and Open
+Tests/
+│── FileHandlerHashingTests.cs
+│── FileHandlerOpenTests.cs
+```
+🚫 **Bad Example:**
+```
+Tests/
+│── FileHandlerHashingAndOpenTests.cs // ❌ Merges multiple regions into a single test class
+```
+
+---
+
+## **4. Test Method Naming**
 Clear method names document the behavior under test and the expected outcome, which helps maintainers understand intent without rereading the implementation. Vague or inconsistent names hide gaps in coverage, encourage multi-purpose tests, and make regression triage harder when a failing test name does not reveal what broke.
 - Each test method **must start with** `Test_`.
 - Use underscores to separate major phrases in the test method name.
 - Test method names should **not contain consecutive underscores**.
-- If multiple class methods are being tested in the same file, the test method **must start with** `Test_<MethodName>_`.
-- If a single method is being tested in the file, the method name **must be omitted**.
+- If multiple production methods are being tested within the same test class, the test method **must start with** `Test_<MethodName>_`.
+- If a single production method is being tested in the file, the production method name **must be omitted** from the test method.
 - The method name should be **descriptive and readable**, reflecting the behavior under test.
 - **Separate tests** into distinct methods rather than combining multiple test cases.
 - **Avoid parameterized tests** unless they significantly improve clarity.
@@ -64,30 +108,7 @@ public void Test_MultipleCases() // ❌ Tests multiple things at once
 
 ---
 
-## **3. Test Class Organization**
-Organizing tests so each file targets a specific class, region, or method keeps suites modular and reduces cognitive load when diagnosing failures. When unrelated scenarios share a test class, fixtures bloat, setup logic becomes tangled, and small changes risk unintended side-effects on seemingly distant tests.
-- **Each test class should cover a single class, region, or method under test**.
-- **When testing a complex class, each region or method should have its own test class**.
-- This ensures that tests are **modular, easy to locate, and maintainable**.
-- **A test class' file name must be of the form `<ClassName>[<RegionName>][<MethodName>]Tests.cs`**.
-- Any component found in the file name **must be duplicated in the test class name**.
-
-✅ **Good Example:**
-```
-Tests/
-│── AuthenticationTests.cs    // Covers `Authenticate()`
-│── RequestProcessingTests.cs // Covers `ProcessRequest()`
-│── ServiceTests.cs           // Covers multiple service methods separately
-```
-🚫 **Bad Example:**
-```
-Tests/
-│── AllServicesTests.cs  // ❌ Mixed tests in one file
-```
-
----
-
-## **4. Test Structure**
+## **5. Test Method Sectioning**
 Standardized sections carve complex tests into digestible steps, making it easier to see how inputs flow through mocks and the system under test. Without this structure tests devolve into monolithic blocks where intent, setup, and verification intermingle, obscuring bugs and encouraging brittle copy-paste patterns.
 Each test method follows a structured format, **separated by clear comments**:
 - Where possible, the order of sections should be as it is presented below.
@@ -209,7 +230,7 @@ public void Test_ProcessData_ReturnsCorrectValue()
 
 ---
 
-## **5. Fixtures: Best Practices**
+## **6. Fixtures: Best Practices**
 Reusable fixtures encourage realistic, DRY data that mirrors production scenarios while keeping tests focused on behavior instead of data plumbing. Inlining bespoke objects everywhere invites duplication, increases maintenance costs when models evolve, and makes it harder to reason about how changes cascade across tests.
 - **Prefer fixtures over mocks**—favor shared, reusable fixtures rather than creating one-off test data. Fixtures help keep your tests DRY and consistent, and allow them to work on more accurate test data.
 - **Instantiate fixtures in the appropriate section** e.g. GIVEN or SETUP, and modify it as needed to fit the test's needs.
@@ -308,7 +329,7 @@ public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExis
 
 ---
 
-## **6. Mocking: Best Practices**
+## **7. Mocking: Best Practices**
 Disciplined mocking keeps tests readable and trustworthy by ensuring only true collaborators are simulated and their expectations are explicit. Unrestrained mocks create brittle, implementation-driven tests that break on harmless refactors, mask missing coverage of dependencies, and clutter SUT construction with framework boilerplate.
 - **Never mock what you don't have to**—prefer fixtures or real instances where practical.
 - **Only mock things that the system-under-test uses directly**—this ensures that your test exercises the SUT properly, without falling into the trap of combinatorial execution path counts as call-depth increases.
