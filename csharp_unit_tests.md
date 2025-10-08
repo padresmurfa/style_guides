@@ -36,6 +36,7 @@ Consistent test class names make it immediately obvious which production code a 
 - If a test class exercises a whole class and all of its methods, it must be named `<ClassName>Tests`.
 - If a test class exercises a single region within a class, it must be named `<ClassName><RegionName>Tests`.
 - If a test class exercises a single method within a class, it must be named `<ClassName><MethodName>Tests` or `<ClassName><RegionName><MethodName>Tests`.
+- Region-focused and method-focused test classes are **optional** patterns. Prefer them when they make intent clearer, but feel free to keep everything in a single `<ClassName>Tests` class when the class-under-test is small enough that splitting would add overhead without clarity.
 - Test class names should not contain underscores.
 - **Each test class should cover a single class, region, or method under test.**
 - **A test class' file name must be of the form `<ClassName>[<RegionName>][<MethodName>]Tests.cs`**, and every component of the file name must appear in the class name exactly once and in the same order.
@@ -57,7 +58,7 @@ public class FileHandlerInitializationAndHashingTests() // ❌ Combines multiple
 ---
 
 ## **3. Region-Focused Test Classes**
-Regions describe cohesive areas of responsibility inside a production class. Mirroring those regions in the test suite keeps the feedback loop tight by ensuring every region has an intentionally scoped test class.
+Regions describe cohesive areas of responsibility inside a production class. Mirroring those regions in the test suite keeps the feedback loop tight by ensuring every region has an intentionally scoped test class. Treat these region-focused classes as a tool rather than a mandate—when a production class only has a handful of regions or methods, duplicating files for each can be overkill.
 - Only introduce a `<RegionName>` segment when the production code exposes a `#region` with the same PascalCase name.
 - When a class contains multiple regions, create a separate test class per region, following the naming rules above and keeping each class in its own file.
 - Do not reuse a `<RegionName>` segment across unrelated production regions; each region must map to a single test class.
@@ -83,10 +84,13 @@ Tests/
 Clear method names document the behavior under test and the expected outcome, which helps maintainers understand intent without rereading the implementation. Vague or inconsistent names hide gaps in coverage, encourage multi-purpose tests, and make regression triage harder when a failing test name does not reveal what broke.
 - Each test method **must start with** `Test_`.
 - Use underscores to separate major phrases in the test method name.
+- Although test classes stay in PascalCase with no underscores, **test methods are encouraged to use underscores** so long names remain readable.
 - Test method names should **not contain consecutive underscores**.
 - If multiple production methods are being tested within the same test class, the test method **must start with** `Test_<MethodName>_`.
 - If a single production method is being tested in the file, the production method name **must be omitted** from the test method.
 - The method name should be **descriptive and readable**, reflecting the behavior under test.
+- Favor verbosity over brevity—short names rarely communicate enough context to make the test self-documenting.
+- Test method names must describe the **specific branch of execution** they cover (e.g. `Test_Foo_ReturnsBar_WhenSuccessful`), not merely state that something "works".
 - **Separate tests** into distinct methods rather than combining multiple test cases.
 - **Avoid parameterized tests** unless they significantly improve clarity.
 - Any component found in the test class name **must NOT be duplicated in the test method name**.
@@ -109,7 +113,7 @@ public void Test_MultipleCases() // ❌ Tests multiple things at once
 ---
 
 ## **5. Test Method Sectioning**
-Standardized sections carve complex tests into digestible steps, making it easier to see how inputs flow through mocks and the system under test. Without this structure tests devolve into monolithic blocks where intent, setup, and verification intermingle, obscuring bugs and encouraging brittle copy-paste patterns.
+Standardized sections carve complex tests into digestible steps, making it easier to see how inputs flow through mocks and the system under test. Without this structure tests devolve into monolithic blocks where intent, setup, and verification intermingle, obscuring bugs and encouraging brittle copy-paste patterns. The ordering rules below are intentionally strong to build reliable habits—refer to [**Section 17. Breaking the Rules**](#-17-breaking-the-rules) for guidance on the rare cases where deviating is justified.
 Each test method follows a structured format, **separated by clear comments**:
 - Where possible, the order of sections should be as it is presented below.
 - Empty sections should be omitted.
@@ -439,7 +443,7 @@ public void Test_ServiceCallsDependency()
 
 ---
 
-## **7. Assertions & Variable Naming**
+## **8. Assertions & Variable Naming**
 Strict naming patterns for expected and actual values highlight the difference between inputs, outputs, and verifications, which speeds up failure analysis. Mixing literals and setup variables inside assertions hides intent, makes diffs noisy, and increases the chance of asserting against the wrong data.
 - **Expected values** always assign input values (from the GIVEN section) to `expected*` variables in the EXPECTATIONS section if you intend to assert on them in the THEN or BEHAVIOR sections.
 - **Actual results** all actual results must be assigned to `actual*` variables in the WHEN section.
@@ -464,7 +468,7 @@ Assert.AreEqual(42, actualResult); // ❌ No expected variable
 
 ---
 
-## **8. Exception Handling (`Assert.Throws`)**
+## **9. Exception Handling (`Assert.Throws`)**
 Treating exception capture as part of the WHEN stage keeps control flow explicit and prevents assertions from being buried inside delegates. When the thrown exception is not stored and verified deliberately, tests can pass for the wrong reason, masking regressions where different error types or messages are emitted.
 
 When using a mechanism such as Assert.Throws to wrap the SUT invocation, the exception name that is being asserted against
@@ -496,7 +500,7 @@ public void Test_DivideByZero_ThrowsException()
 
 ---
 
-## **9. Using `[SetUp]` Methods**
+## **10. Using `[SetUp]` Methods**
 Being intentional about `[SetUp]` usage ensures shared initialization is truly common while test-specific context stays near the scenario. Overusing setup hooks leads to hidden coupling between tests, complicated fixture state, and surprises when one case mutates shared members that another silently depends on.
 - **Avoid `[SetUp]`**. Favor using sharable fixtures, declared in a static fixture factory class, instead.
 - Use `[SetUp]` only for **repeated initialization**.
@@ -520,7 +524,7 @@ public void Setup()
 
 ---
 
-## **10. Organizing Tests in Namespaces**
+## **11. Organizing Tests in Namespaces**
 Mirroring production namespaces in the test suite keeps navigation intuitive and tooling-friendly, so developers can jump between code and tests effortlessly. When namespace structures drift, IDE search results become noisy, automated discovery may misbehave, and contributors struggle to find the right home for new cases.
 - **Group related test classes into namespaces**.
 - Ensure **each namespace matches the SUT structure**.
@@ -550,14 +554,77 @@ namespace Services.ServicesTests // ❌ do not increase the indent for namespace
 
 ---
 
-## **11. Using comments in tests**
+## **12. Managing Copy-Paste Setup**
+Copy-paste programming is often the most readable choice for test setup. Start with a "happy path" test that spells out the full arrangement, and copy that scaffolding into edge-case tests, tweaking only what changes for each branch. With disciplined sectioning and modern AI-assisted refactoring tools, duplicating the setup is usually quicker and clearer than inventing cryptic helper methods whose behavior must be reverse-engineered.
+- Prefer duplication first, then refactor **only when** the abstraction makes the setup easier to understand than the copied code it replaces.
+- When a shared helper truly improves clarity, keep it near the tests that use it and document which scenarios rely on it so future contributors know when to extend or bypass it.
+- When you do copy setup code, call out the variations in the section-header comments (e.g. `// GIVEN: user has insufficient balance`). These comments act as signposts so reviewers can immediately see why one test diverges from another despite similar bodies.
+
+---
+
+## **13. Deterministic Tests and Dependency Injection**
+Unit tests should be deterministic: the same inputs must produce the same results every run. Nondeterminism from global state, random values, or "current time" APIs usually erodes trust in the suite. Occasionally, allowing nondeterminism in aspects that **should not** affect the outcome is valuable—flaky failures in those cases expose hidden coupling or misunderstood behavior. Treat such flakes as signals to either fix the bug they reveal or document the learning and firm up the contract under test.
+- Isolate side effects behind interfaces and inject them into the system under test. Use dependency injection (DI) so the test can supply controlled fakes, especially for time-sensitive behavior.
+- Avoid calling `DateTime.Now`, `Guid.NewGuid()`, or static singletons from production code during tests. Instead, inject a clock, ID generator, or configuration provider that the test can stub.
+- For time-sensitive logic, pass an `ISystemClock` or similar abstraction. Tests can freeze "now" to a predictable value while production supplies a real clock, making the deterministic path explicit.
+- When code mixes deterministic calculations with nondeterministic reads, refactor into two methods: one that gathers inputs (time, randomness, HTTP responses) and another that performs pure computation. Unit test the deterministic method directly and cover the integration path separately if needed.
+
+✅ **Example: controlling current time with DI**
+```csharp
+public interface IClock
+{
+    DateTimeOffset UtcNow { get; }
+}
+
+public class InvoiceService
+{
+    private readonly IClock _clock;
+
+    public InvoiceService(IClock clock) => _clock = clock;
+
+    public Invoice CreateInvoice(Order order)
+    {
+        DateTimeOffset generatedAt = _clock.UtcNow;
+        return new Invoice(order.Id, generatedAt);
+    }
+}
+
+[Fact]
+public void Test_CreateInvoice_UsesProvidedClock()
+{
+    // GIVEN
+    DateTimeOffset givenNow = DateTimeOffset.Parse("2024-02-01T09:30:00Z");
+    Mock<IClock> mockClock = new(MockBehavior.Strict);
+    mockClock.Setup(clock => clock.UtcNow).Returns(givenNow).Verifiable();
+
+    // SYSTEM UNDER TEST
+    IClock envClock = mockClock.Object;
+    InvoiceService sut = new(envClock);
+
+    // WHEN
+    Invoice actualInvoice = sut.CreateInvoice(new Order(Guid.Empty));
+
+    // EXPECTATIONS
+    DateTimeOffset expectedGeneratedAt = givenNow;
+
+    // THEN
+    Assert.Equal(expectedGeneratedAt, actualInvoice.GeneratedAt);
+
+    // BEHAVIOR
+    mockClock.Verify(clock => clock.UtcNow, Times.Once);
+}
+```
+
+---
+
+## **14. Using comments in tests**
 Documenting test intent with XML comments provides high-level context that complements the structured sections, guiding readers through why a scenario exists. Without these explanations, future maintainers must infer purpose from mechanics alone, risking redundant cases or accidental deletion of critical coverage.
 
 - **Each test method should be commented with a human-readable explanation of what the test is exercising**
 - **Each test class should be commented with a human-readable explanation of what the test class is exercising**
 - **Use the XML comment syntax to comment test classes and test methods**
 
-## **12. Increasing test clarity with section comments**
+## **15. Increasing test clarity with section comments**
 Narrated section headers transform dense setup or verification code into self-explanatory stories that highlight intent and edge cases. Skipping these comments forces reviewers to reverse-engineer the reason behind each block, slowing code reviews and making it easier for subtle regressions to slip through.
 
 **As a best practice**, when tests have complex parts such as setting up mocks, creating complex 'given' objects, asserting on mock behavior, and so forth, it is recommended to split each such part into a section of its own, and comment what that section is doing. These headers act like a decryption key for the reader: each full-sentence comment explicitly states the intent of the code beneath it, so that even when the implementation is dense or unfamiliar, the reader can immediately understand _why_ a block exists rather than mentally reverse-engineering the setup from the statements themselves.
@@ -634,7 +701,7 @@ public class UserServiceTests
 
 ---
 
-## **13. SETUP / SUT Dependency Rule**
+## **16. SETUP / SUT Dependency Rule**
 Reinforcing the separation between SETUP dependencies and the system under test protects against leaky abstractions and keeps constructor wiring transparent. When mocks or fixtures sneak directly into SUT creation, the test intent becomes opaque, accidental coupling increases, and regressions slip in because collaborators are no longer clearly expressed through `env*` variables.
 
 To re-iterate:
@@ -642,4 +709,12 @@ To re-iterate:
 - The **SETUP** section must initialize all dependencies passed to the **SUT** via `env*` variables.
 - The **SYSTEM UNDER TEST** section must construct the **SUT** using only `env*` variables.
 - Mocks must never be used directly in the **SYSTEM UNDER TEST** section.
+
+---
+
+## **17. Breaking the Rules**
+The guidelines above are intentionally prescriptive so tests remain predictable and reviewable. However, real-world systems occasionally demand exceptions.
+- Deviation is acceptable when it **improves clarity or determinism** for a specific edge case that the standard pattern cannot express cleanly.
+- When you break a rule, **document the rationale inline** (e.g. with a comment or XML doc) so future maintainers understand why the exception exists.
+- Re-evaluate exceptions periodically. If the surrounding production code changes, the original constraint may disappear and the standard structure can be restored.
 
