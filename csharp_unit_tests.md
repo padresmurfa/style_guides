@@ -310,6 +310,65 @@ public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExis
 - **Use Moq or built-in mocking frameworks** for dependency injection.
 - **Assertions on mock interactions go in the BEHAVIOR section, not in the THEN section**.
 - **Mocks must never be passed directly to the system under test.** Instead, assign mocks to interface-conforming env* variables in SETUP and pass those to the SUT.
+- Following this pattern keeps the SUT construction readable: the MOCKING section owns the intricate setup, the SETUP section exposes the ready-to-use interfaces via `env*` variables, and the SYSTEM UNDER TEST section reads like a clean recipe that highlights only the essential collaborators. Without the intermediate `env*` assignments the constructor or method invocation under test quickly devolves into a wall of `.Object` accessors and configuration noise, making it difficult for reviewers to decipher which dependency is which.
+
+**✅ Example with `env*` indirection (clean SUT construction):**
+```csharp
+[Fact]
+public async Task Test_SubmitOrder_SchedulesShipment()
+{
+    // GIVEN: an order that should be shipped immediately
+    Guid givenOrderId = Guid.NewGuid();
+    Order givenOrder = new(givenOrderId, ShipImmediately: true);
+
+    // MOCKING: configure repository, clock, and message bus behaviors
+    Mock<IOrderRepository> mockRepository = new(MockBehavior.Strict);
+    mockRepository.Setup(repo => repo.GetAsync(givenOrderId)).ReturnsAsync(givenOrder).Verifiable();
+    Mock<ISystemClock> mockClock = new(MockBehavior.Strict);
+    mockClock.Setup(clock => clock.UtcNow).Returns(DateTimeOffset.Parse("2024-01-01T12:00:00Z")).Verifiable();
+    Mock<IMessageBus> mockMessageBus = new(MockBehavior.Strict);
+    mockMessageBus.Setup(bus => bus.PublishAsync(It.IsAny<ShipmentScheduled>())).Returns(Task.CompletedTask).Verifiable();
+
+    // SETUP: expose the mocks through the environment dependencies used by the SUT
+    IOrderRepository envRepository = mockRepository.Object;
+    ISystemClock envClock = mockClock.Object;
+    IMessageBus envMessageBus = mockMessageBus.Object;
+    OrderProcessingOptions envOptions = new() { BatchSize = 20 };
+
+    // SYSTEM UNDER TEST: wire dependencies without revealing mock plumbing
+    OrderProcessor sut = new(envRepository, envClock, envMessageBus, envOptions);
+
+    // WHEN: exercise the behavior under test
+    await sut.SubmitOrderAsync(givenOrderId);
+
+    // ... THEN and BEHAVIOR sections omitted for brevity ...
+}
+```
+
+**🚫 Example without `env*` indirection (hard-to-read SUT construction):**
+```csharp
+[Fact]
+public async Task Test_SubmitOrder_SchedulesShipment()
+{
+    Mock<IOrderRepository> mockRepository = new(MockBehavior.Strict);
+    Mock<ISystemClock> mockClock = new(MockBehavior.Strict);
+    Mock<IMessageBus> mockMessageBus = new(MockBehavior.Strict);
+    mockRepository.Setup(r => r.GetAsync(It.IsAny<Guid>())).ReturnsAsync(new Order(Guid.NewGuid(), true));
+    mockClock.Setup(c => c.UtcNow).Returns(DateTimeOffset.UtcNow);
+    mockMessageBus.Setup(b => b.PublishAsync(It.IsAny<ShipmentScheduled>())).Returns(Task.CompletedTask);
+
+    // SYSTEM UNDER TEST: constructor obscured by inline .Object calls and configuration noise
+    OrderProcessor sut = new(
+        mockRepository.Object,
+        mockClock.Object,
+        mockMessageBus.Object,
+        new OrderProcessingOptions { BatchSize = 20 }
+    );
+
+    await sut.SubmitOrderAsync(Guid.NewGuid());
+}
+```
+In the second snippet the constructor is dominated by mock plumbing, forcing the reader to mentally map each `.Object` back to the earlier declarations. By contrast, the first snippet lets the SYSTEM UNDER TEST section focus on the collaborators themselves (`envRepository`, `envClock`, etc.), so the purpose of each dependency remains obvious even when the setup logic is complex.
 - **Prefer verifying log output in addition to mock verifications**—capturing and asserting on log entries is usually easier to implement correctly, more readable for future maintainers, and often avoids the “gnarly” setup required to capture mock parameters.
 - **All mocks must be created in verifiable mode**:
   - Use `new Mock<T>(MockBehavior.Strict)` to catch any unexpected calls, _or_
@@ -468,7 +527,7 @@ namespace Services.ServicesTests // ❌ do not increase the indent for namespace
 
 ## **12. Increasing test clarity with section comments**
 
-**As a best practice**, when tests have complex parts such as setting up mocks, creating complex 'given' objects, asserting on mock behavior, and so forth, it is recommended to split each such part into a section of its own, and comment what that section is doing
+**As a best practice**, when tests have complex parts such as setting up mocks, creating complex 'given' objects, asserting on mock behavior, and so forth, it is recommended to split each such part into a section of its own, and comment what that section is doing. These headers act like a decryption key for the reader: each full-sentence comment explicitly states the intent of the code beneath it, so that even when the implementation is dense or unfamiliar, the reader can immediately understand _why_ a block exists rather than mentally reverse-engineering the setup from the statements themselves.
 
 ✅ **Good Example:**
 ```csharp
