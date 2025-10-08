@@ -343,6 +343,133 @@ Disciplined mocking keeps tests readable and trustworthy by ensuring only true c
 - **Mocks must never be passed directly to the system under test.** Instead, assign mocks to interface-conforming env* variables in SETUP and pass those to the SUT.
 - Following this pattern keeps the SUT construction readable: the MOCKING section owns the intricate setup, the SETUP section exposes the ready-to-use interfaces via `env*` variables, and the SYSTEM UNDER TEST section reads like a clean recipe that highlights only the essential collaborators. Without the intermediate `env*` assignments the constructor or method invocation under test quickly devolves into a wall of `.Object` accessors and configuration noise, making it difficult for reviewers to decipher which dependency is which.
 
+### **7.1 Test Fakes (a.k.a. Dummies)**
+Test fakes are lightweight, purpose-built implementations of an interface that you author specifically for the test suite. They shine when mocking frameworks become gnarly—especially for complex interaction verification or structured log inspection—because you can write direct, intention-revealing code without wrestling with callback signatures or argument matchers.
+
+- **Create fakes when setup or verification with a mock would be noisy, repetitive, or brittle.** If verifying interactions through a mocking framework requires delegates, reflection, or deeply nested `It.Is` expressions, a fake is often clearer.
+- **Name fake instances with the `fake*` prefix and construct them in the MOCKING section.** This keeps parity with mock naming so readers instantly recognize simulated collaborators.
+- **Assign each `fake*` variable to an `env*` variable in the SETUP section before handing it to the SUT.** Treat a fake like any other dependency so the SYSTEM UNDER TEST section stays clean and only references `env*` collaborators.
+- **Interact with the fake via its `fake*` variable in the THEN, LOGGING, and BEHAVIOR sections.** Fakes frequently expose custom assertion helpers (e.g., `fakeLogger.AssertExercised(...)`) that capture behavior without `mock.Verify(...)` boilerplate.
+- **Document expectations inside the fake when possible.** Purpose-built helpers (such as storing structured log entries) make intent obvious and reduce duplicated parsing logic across tests.
+
+#### Strengths Compared to Mocks
+- **Readable behavior verification.** Fakes encapsulate the verification logic in methods that read like English, avoiding the visual clutter of `Times.Once()` and `It.IsAny<T>()` chains.
+- **Reduced setup friction.** Because you own the implementation, you can build constructors and helper methods that mirror your domain vocabulary, instead of contorting the SUT to satisfy framework APIs.
+- **Deterministic assertions.** Fakes can capture state (e.g., recorded log entries) and expose first-class assertions, lowering the risk of brittle, order-dependent mock verifications.
+
+#### Weaknesses Compared to Mocks
+- **Maintenance cost.** You must maintain the fake implementation alongside production interfaces. If the interface evolves, the fake must be updated manually.
+- **Limited behavioral coverage.** A fake typically encodes only the paths needed by the current test suite. Mocks can dynamically configure behaviors per test without editing shared code.
+- **Risk of drifting from reality.** Because a fake is handwritten, it might omit subtle behavior the real dependency exhibits. Use fixtures and integration tests to guard against divergence.
+
+#### Example: Logging with a Fake vs. a Mock
+Consider a service that logs a structured trace message—`"Foo(branch=bar): the foo is quite barred"`—whenever it processes a branch.
+
+**✅ Fake-based test (clean and intention revealing):**
+```csharp
+[Fact]
+public void Test_ProcessBranch_LogsTraceMessage()
+{
+    // GIVEN: a branch identifier that should trigger logging
+    string givenBranchId = "bar";
+
+    // MOCKING: create test fakes for collaborators
+    FakeLogger fakeLogger = new();
+
+    // SETUP: expose the fake through env* variables
+    ILogger envLogger = fakeLogger;
+
+    // SYSTEM UNDER TEST: inject the fake logger
+    BranchProcessor sut = new(envLogger);
+
+    // WHEN: process the branch
+    sut.ProcessBranch(givenBranchId);
+
+    // THEN: log assertions belong in LOGGING or BEHAVIOR
+
+    // LOGGING: ensure the trace message was written
+    fakeLogger.AssertExercised("Foo", "bar");
+}
+
+private sealed class FakeLogger : ILogger
+{
+    private readonly List<(string Category, string Branch, string Message)> _entries = new();
+
+    public IDisposable BeginScope<TState>(TState state) => NullScope.Instance;
+
+    public bool IsEnabled(LogLevel logLevel) => logLevel <= LogLevel.Trace;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        if (logLevel == LogLevel.Trace && state is { } payload)
+        {
+            string message = formatter(payload, exception);
+            _entries.Add(("Foo", ExtractBranch(payload), message));
+        }
+    }
+
+    public void AssertExercised(string expectedCategory, string expectedBranch)
+    {
+        (string Category, string Branch, string Message) entry = Assert.Single(_entries);
+        Assert.Equal(expectedCategory, entry.Category);
+        Assert.Equal(expectedBranch, entry.Branch);
+        Assert.Equal($"Foo(branch={expectedBranch}): the foo is quite barred", entry.Message);
+    }
+
+    private static string ExtractBranch<TState>(TState state) => state switch
+    {
+        { } when state is IReadOnlyDictionary<string, object?> dict && dict.TryGetValue("branch", out object? value) => value?.ToString() ?? string.Empty,
+        _ => string.Empty
+    };
+
+    private sealed class NullScope : IDisposable
+    {
+        public static readonly NullScope Instance = new();
+        public void Dispose() { }
+    }
+}
+```
+
+This fake keeps the test sections focused: the MOCKING block builds a dedicated helper (`FakeLogger`), the SETUP block wires it through `envLogger`, and the LOGGING section uses a single, expressive assertion. The helper encapsulates state capture and verification, so the test reads like a story.
+
+**🚫 Mock-based alternative (gnarly and verbose):**
+```csharp
+[Fact]
+public void Test_ProcessBranch_LogsTraceMessage_WithMock()
+{
+    // GIVEN: a branch identifier that should trigger logging
+    string givenBranchId = "bar";
+
+    // MOCKING: configure a strict logger mock to capture the structured message
+    Mock<ILogger> mockLogger = new(MockBehavior.Strict);
+    mockLogger
+        .Setup(logger => logger.Log(
+            LogLevel.Trace,
+            It.IsAny<EventId>(),
+            It.Is<It.IsAnyType>((state, _) =>
+                state.ToString() == "Foo(branch=bar): the foo is quite barred" &&
+                state.GetType().GetProperty("branch")?.GetValue(state)?.Equals("bar") == true),
+            null,
+            It.IsAny<Func<It.IsAnyType, Exception?, string>>()
+        ))
+        .Verifiable("Expected trace log was not emitted");
+
+    // SETUP: expose the mock through env* variables
+    ILogger envLogger = mockLogger.Object;
+
+    // SYSTEM UNDER TEST: inject the mock logger
+    BranchProcessor sut = new(envLogger);
+
+    // WHEN: process the branch
+    sut.ProcessBranch(givenBranchId);
+
+    // BEHAVIOR: verify the mock interaction
+    mockLogger.Verify();
+}
+```
+
+Even a simple log assertion requires `It.Is<It.IsAnyType>` gymnastics, reflection to examine anonymous types, and a final `Verify()` call. The fake-based version hides that complexity and offers a single, intention-revealing `AssertExercised` method. When mocks feel this gnarly, prefer a fake.
+
 **✅ Example with `env*` indirection (clean SUT construction):**
 ```csharp
 [Fact]
