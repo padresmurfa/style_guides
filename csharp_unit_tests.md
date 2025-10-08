@@ -37,7 +37,7 @@ public class FileHandlerInitializationAndHashingTests() // ❌ Must not combine 
 ## **2. Test Method Naming**
 - Each test method **must start with** `Test_`.
 - Use underscores to separate major phrases in the test method name.
-- Test method names should note contain consequtive underscores.
+- Test method names should **not contain consecutive underscores**.
 - If multiple class methods are being tested in the same file, the test method **must start with** `Test_<MethodName>_`.
 - If a single method is being tested in the file, the method name **must be omitted**.
 - The method name should be **descriptive and readable**, reflecting the behavior under test.
@@ -206,7 +206,7 @@ public void Test_ProcessData_ReturnsCorrectValue()
 ---
 
 ## **5. Fixtures: Best Practices**
-- **Prefer fixtures over mocks**- preferring to use shared, reusable fixtures rather than creating one-off test data. Fixtures help keep your tests DRY and consistent, and allows them to work on more accurate test data.
+- **Prefer fixtures over mocks**—favor shared, reusable fixtures rather than creating one-off test data. Fixtures help keep your tests DRY and consistent, and allow them to work on more accurate test data.
 - **Instantiate fixtures in the appropriate section** e.g. GIVEN or SETUP, and modify it as needed to fit the test's needs.
 - **Use a sharable fixture factory** instead of creating fixtures or complex test data inline
 
@@ -305,7 +305,7 @@ public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExis
 
 ## **6. Mocking: Best Practices**
 - **Never mock what you don't have to**—prefer fixtures or real instances where practical.
-- **Only mock things that the system-under-test uses directly**-this ensures that your test exercises the SUT properly, without falling into the trap of combinatorial execution path counts as call-depth increases.
+- **Only mock things that the system-under-test uses directly**—this ensures that your test exercises the SUT properly, without falling into the trap of combinatorial execution path counts as call-depth increases.
 - The systems that your SUT uses directly should be covered by their own direct unit tests, not by the unit tests of your SUT.
 - **Use Moq or built-in mocking frameworks** for dependency injection.
 - **Assertions on mock interactions go in the BEHAVIOR section, not in the THEN section**.
@@ -321,17 +321,18 @@ public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExis
 [Test]
 public void Test_ServiceCallsDependency()
 {
-    // GIVEN
-    var mockDependency = new Mock<IDependency>();
+    // MOCKING: create a strict dependency mock
+    Mock<IDependency> mockDependency = new(MockBehavior.Strict);
+    mockDependency.Setup(x => x.PerformTask()).Verifiable();
 
-    // MOCKING
+    // SETUP: expose the mock through the dependency interface
     IDependency envDependency = mockDependency.Object;
 
     // SYSTEM UNDER TEST
-    var givenService = new MyService(envDependency);
+    var sut = new MyService(envDependency);
 
     // WHEN
-    givenService.DoWork();
+    sut.DoWork();
 
     // BEHAVIOR
     mockDependency.Verify(x => x.PerformTask(), Times.Once());
@@ -397,6 +398,12 @@ public void Test_DivideByZero_ThrowsException()
     {
         Math.Divide(givenNumerator, givenDenominator);
     });
+
+    // EXPECTATIONS
+    Type expectedExceptionType = typeof(DivideByZeroException);
+
+    // THEN
+    Assert.Equal(expectedExceptionType, actualException.GetType());
 }
 
 ---
@@ -535,7 +542,7 @@ public class UserServiceTests
 
 ---
 
-## **12. SETUP / SUT Dependency Rule **
+## **13. SETUP / SUT Dependency Rule**
 
 To re-iterate:
 
