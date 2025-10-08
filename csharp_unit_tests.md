@@ -13,6 +13,7 @@ These practices may be too detailed for human-written tests but serve as an exce
 ---
 
 ## **1. Test Class Naming**
+Consistent test class names make it immediately obvious which production code a suite exercises, so reviewers can trace failures quickly and spot coverage gaps. Without a naming convention teams waste time hunting for relevant tests, duplicate effort, and risk overlooking scenarios because responsibilities are spread across ambiguously labeled files.
 - Each test class **must end with** `Tests`.
 - If a test class exercises a whole class and all of its methods, it must be named `<ClassName>Tests`.
 - If a test class exercises a single region within a class, it must be named `<ClassName><RegionName>Tests`.
@@ -35,6 +36,7 @@ public class FileHandlerInitializationAndHashingTests() // ❌ Must not combine 
 ---
 
 ## **2. Test Method Naming**
+Clear method names document the behavior under test and the expected outcome, which helps maintainers understand intent without rereading the implementation. Vague or inconsistent names hide gaps in coverage, encourage multi-purpose tests, and make regression triage harder when a failing test name does not reveal what broke.
 - Each test method **must start with** `Test_`.
 - Use underscores to separate major phrases in the test method name.
 - Test method names should **not contain consecutive underscores**.
@@ -63,6 +65,7 @@ public void Test_MultipleCases() // ❌ Tests multiple things at once
 ---
 
 ## **3. Test Class Organization**
+Organizing tests so each file targets a specific class, region, or method keeps suites modular and reduces cognitive load when diagnosing failures. When unrelated scenarios share a test class, fixtures bloat, setup logic becomes tangled, and small changes risk unintended side-effects on seemingly distant tests.
 - **Each test class should cover a single class, region, or method under test**.
 - **When testing a complex class, each region or method should have its own test class**.
 - This ensures that tests are **modular, easy to locate, and maintainable**.
@@ -85,6 +88,7 @@ Tests/
 ---
 
 ## **4. Test Structure**
+Standardized sections carve complex tests into digestible steps, making it easier to see how inputs flow through mocks and the system under test. Without this structure tests devolve into monolithic blocks where intent, setup, and verification intermingle, obscuring bugs and encouraging brittle copy-paste patterns.
 Each test method follows a structured format, **separated by clear comments**:
 - Where possible, the order of sections should be as it is presented below.
 - Empty sections should be omitted.
@@ -206,6 +210,7 @@ public void Test_ProcessData_ReturnsCorrectValue()
 ---
 
 ## **5. Fixtures: Best Practices**
+Reusable fixtures encourage realistic, DRY data that mirrors production scenarios while keeping tests focused on behavior instead of data plumbing. Inlining bespoke objects everywhere invites duplication, increases maintenance costs when models evolve, and makes it harder to reason about how changes cascade across tests.
 - **Prefer fixtures over mocks**—favor shared, reusable fixtures rather than creating one-off test data. Fixtures help keep your tests DRY and consistent, and allow them to work on more accurate test data.
 - **Instantiate fixtures in the appropriate section** e.g. GIVEN or SETUP, and modify it as needed to fit the test's needs.
 - **Use a sharable fixture factory** instead of creating fixtures or complex test data inline
@@ -304,6 +309,7 @@ public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExis
 ---
 
 ## **6. Mocking: Best Practices**
+Disciplined mocking keeps tests readable and trustworthy by ensuring only true collaborators are simulated and their expectations are explicit. Unrestrained mocks create brittle, implementation-driven tests that break on harmless refactors, mask missing coverage of dependencies, and clutter SUT construction with framework boilerplate.
 - **Never mock what you don't have to**—prefer fixtures or real instances where practical.
 - **Only mock things that the system-under-test uses directly**—this ensures that your test exercises the SUT properly, without falling into the trap of combinatorial execution path counts as call-depth increases.
 - The systems that your SUT uses directly should be covered by their own direct unit tests, not by the unit tests of your SUT.
@@ -413,6 +419,7 @@ public void Test_ServiceCallsDependency()
 ---
 
 ## **7. Assertions & Variable Naming**
+Strict naming patterns for expected and actual values highlight the difference between inputs, outputs, and verifications, which speeds up failure analysis. Mixing literals and setup variables inside assertions hides intent, makes diffs noisy, and increases the chance of asserting against the wrong data.
 - **Expected values** always assign input values (from the GIVEN section) to `expected*` variables in the EXPECTATIONS section if you intend to assert on them in the THEN or BEHAVIOR sections.
 - **Actual results** all actual results must be assigned to `actual*` variables in the WHEN section.
 - **Never assert against literals directly** — use `expected*` variables.
@@ -437,6 +444,7 @@ Assert.AreEqual(42, actualResult); // ❌ No expected variable
 ---
 
 ## **8. Exception Handling (`Assert.Throws`)**
+Treating exception capture as part of the WHEN stage keeps control flow explicit and prevents assertions from being buried inside delegates. When the thrown exception is not stored and verified deliberately, tests can pass for the wrong reason, masking regressions where different error types or messages are emitted.
 
 When using a mechanism such as Assert.Throws to wrap the SUT invocation, the exception name that is being asserted against
 will be placed above the code block that exercises the system under test. In such cases, consider the Assert.Throws mechanism
@@ -468,6 +476,7 @@ public void Test_DivideByZero_ThrowsException()
 ---
 
 ## **9. Using `[SetUp]` Methods**
+Being intentional about `[SetUp]` usage ensures shared initialization is truly common while test-specific context stays near the scenario. Overusing setup hooks leads to hidden coupling between tests, complicated fixture state, and surprises when one case mutates shared members that another silently depends on.
 - **Avoid `[SetUp]`**. Favor using sharable fixtures, declared in a static fixture factory class, instead.
 - Use `[SetUp]` only for **repeated initialization**.
 
@@ -491,6 +500,7 @@ public void Setup()
 ---
 
 ## **10. Organizing Tests in Namespaces**
+Mirroring production namespaces in the test suite keeps navigation intuitive and tooling-friendly, so developers can jump between code and tests effortlessly. When namespace structures drift, IDE search results become noisy, automated discovery may misbehave, and contributors struggle to find the right home for new cases.
 - **Group related test classes into namespaces**.
 - Ensure **each namespace matches the SUT structure**.
 - use the 'namespace <name>;' form rather than the 'namespace <name> {}' form.
@@ -520,12 +530,14 @@ namespace Services.ServicesTests // ❌ do not increase the indent for namespace
 ---
 
 ## **11. Using comments in tests**
+Documenting test intent with XML comments provides high-level context that complements the structured sections, guiding readers through why a scenario exists. Without these explanations, future maintainers must infer purpose from mechanics alone, risking redundant cases or accidental deletion of critical coverage.
 
 - **Each test method should be commented with a human-readable explanation of what the test is exercising**
 - **Each test class should be commented with a human-readable explanation of what the test class is exercising**
 - **Use the XML comment syntax to comment test classes and test methods**
 
 ## **12. Increasing test clarity with section comments**
+Narrated section headers transform dense setup or verification code into self-explanatory stories that highlight intent and edge cases. Skipping these comments forces reviewers to reverse-engineer the reason behind each block, slowing code reviews and making it easier for subtle regressions to slip through.
 
 **As a best practice**, when tests have complex parts such as setting up mocks, creating complex 'given' objects, asserting on mock behavior, and so forth, it is recommended to split each such part into a section of its own, and comment what that section is doing. These headers act like a decryption key for the reader: each full-sentence comment explicitly states the intent of the code beneath it, so that even when the implementation is dense or unfamiliar, the reader can immediately understand _why_ a block exists rather than mentally reverse-engineering the setup from the statements themselves.
 
@@ -602,6 +614,7 @@ public class UserServiceTests
 ---
 
 ## **13. SETUP / SUT Dependency Rule**
+Reinforcing the separation between SETUP dependencies and the system under test protects against leaky abstractions and keeps constructor wiring transparent. When mocks or fixtures sneak directly into SUT creation, the test intent becomes opaque, accidental coupling increases, and regressions slip in because collaborators are no longer clearly expressed through `env*` variables.
 
 To re-iterate:
 
