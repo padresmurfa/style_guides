@@ -117,12 +117,14 @@ test('returns success', () {});  // ❌ Missing Test prefix and context
 
 ## **5. Test Method Sectioning**
 Structured sections make the flow of data obvious and discourage multi-purpose tests.
-- Use `// GIVEN:`, `// MOCKING:`, `// SETUP:`, `// SYSTEM UNDER TEST:`, `// WHEN:`, `// EXPECTATIONS:`, `// THEN:`, and
+- Use `// GIVEN:`, `// CAPTURE:`, `// MOCKING:`, `// SETUP:`, `// SYSTEM UNDER TEST:`, `// WHEN:`, `// EXPECTATIONS:`, `// THEN:`, and
   `// BEHAVIOR:` comments to delineate sections. These mirror the C# guide and must appear in that order when present.
+- Only include `// CAPTURE:` when collaborators need to record information (e.g., spy callbacks). Declare the `capture*` variables here and wire them in the MOCKING section.
 - Omit empty sections entirely rather than leaving placeholder comments.
 - Split complex sections into sub-sections (e.g., `// GIVEN: A persisted customer record`).
 - Variable prefixes mirror the C# style guide but follow Dart's lowerCamelCase conventions:
   - GIVEN variables start with `given` (`givenPaymentRequest`).
+  - Capture placeholders start with `capture` (`capturePublishedEvent`).
   - Mock variables start with `mock` (`mockClient`).
   - Environment variables created in SETUP start with `env` (`envRepository`).
   - The system under test is stored in `sut` (or `sutWidget` when multiple systems exist).
@@ -138,6 +140,9 @@ test('Test returns success when payment is authorized', () {
   // GIVEN: A valid payment request
   final givenRequest = PaymentRequest(...);
 
+  // CAPTURE: Track published domain events
+  final capturePublishedEvent = <DomainEvent>[];
+
   // MOCKING: Configure payment gateway
   final mockGateway = MockGateway();
   when(() => mockGateway.charge(any())).thenReturn(Success());
@@ -150,6 +155,7 @@ test('Test returns success when payment is authorized', () {
 
   // WHEN: Processing the payment
   final actualResult = sut.processPayment(givenRequest);
+  final actualPublishedEvent = capturePublishedEvent.single;
 
   // EXPECTATIONS: Expected success payload
   final expectedStatus = PaymentStatus.success;

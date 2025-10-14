@@ -82,29 +82,36 @@ Each test function should follow this order when the sections are present:
    - Declare immutable inputs and constants with the prefix `given_`.
    - Allocate fixtures and buffers here; track ownership explicitly (e.g., record whether `free` is required).
    - Do not mutate `given_` values outside of the GIVEN block.
-2. **MOCKING**
+2. **CAPTURE**
+   - Introduce variables that will receive values captured from collaborators (e.g., arguments recorded by spies or counters updated by fakes).
+   - Prefix these placeholders with `capture_` so their intent is immediately obvious.
+   - Keep this section limited to declarations; wire up the logic that populates them in MOCKING or SETUP.
+   - Omit CAPTURE when no collaborators need to expose recorded state.
+3. **MOCKING**
    - Configure stubs or fake dependencies. In C this usually means setting global function pointers, installing spy objects, or enabling link-time fakes.
    - Name mock handles `mock_*` and reset them at the end of the test (or in teardown) to avoid leakage across suites.
-3. **SETUP**
-   - Prepare runtime state that will be mutated during the test. Prefix variables with `env_` to indicate environment/configuration objects.
-   - When injecting mocks through function pointers or struct fields, assign the `mock_*` objects to `env_*` handles here.
-4. **SYSTEM UNDER TEST**
+4. **SETUP**
+    - Prepare runtime state that will be mutated during the test. Prefix variables with `env_` to indicate environment/configuration objects.
+    - When injecting mocks through function pointers or struct fields, assign the `mock_*` objects to `env_*` handles here.
+    - Ensure SETUP comes after whichever of GIVEN, CAPTURE, and MOCKING are required; skip unused sections without changing the order.
+5. **SYSTEM UNDER TEST**
    - Instantiate or reference the primary object/function under test. Assign it to a variable named `sut` (or `sut_*` for multiple handles).
    - Never reference `mock_*` variables directly in this section; pass the `env_*` handles instead.
-5. **WHEN**
+6. **WHEN**
    - Invoke the function(s) being tested. Store returned values or observable state in `actual_*` variables.
    - If the framework uses macros (e.g., `cmocka_unit_test_setup_teardown`), still capture outputs explicitly inside the test body.
-6. **EXPECTATIONS**
+   - Move any recorded collaborator state from `capture_*` placeholders into `actual_*` variables before asserting on it.
+7. **EXPECTATIONS**
    - Compute expected results and assign them to `expected_*` variables. Keep these immutable.
    - Avoid inline literals in assertions; storing them in variables clarifies intent and simplifies diffs.
-7. **THEN**
+8. **THEN**
    - Perform assertions comparing `expected_*` and `actual_*` values using the framework’s macros.
    - Keep assertions deterministic—avoid relying on unspecified order of evaluation or short-circuiting.
-8. **LOGGING** (Optional)
+9. **LOGGING** (Optional)
    - If the module emits logs through callback hooks, assert on captured entries here. Favor log verification over complex mocking logic when possible.
-9. **BEHAVIOR** (Required when mocks/spies are present)
+10. **BEHAVIOR** (Required when mocks/spies are present)
    - Verify that mocks were called with the expected parameters. Include explicit counters or flag checks if the harness lacks built-in verification.
-10. **TEARDOWN** (Optional)
+11. **TEARDOWN** (Optional)
     - Release resources created in GIVEN or SETUP (e.g., free heap allocations, close file descriptors).
     - Reset global state or function pointers so subsequent tests start from a clean baseline.
 

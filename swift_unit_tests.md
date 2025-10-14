@@ -112,32 +112,40 @@ Reuse the structured sections from the C# guide to keep Swift tests readable. Us
    - Prefix variables with `given` (e.g. `let givenRequest = URLRequest(...)`).
    - Allocate fixture factories here (types must be named `Fixture*` when shared).
 
-2. **MOCKING** *(optional)*
+2. **CAPTURE** *(optional)*
+   - Introduce containers for values captured from collaborators (e.g. delegate parameters recorded by a spy).
+   - Prefix them with `capture` (`var captureLoggedMessages: [String] = []`).
+   - Keep this section to declarations; configure spies or mocks to populate them later.
+   - Skip this section entirely when no captured values are needed.
+
+3. **MOCKING** *(optional)*
    - Configure spies, mocks, or test doubles. Prefix with `mock` or `spy`.
    - When using protocols, wrap doubles in small helper types nested inside the test file.
 
-3. **SETUP** *(optional but common)*
+4. **SETUP** *(optional but common)*
    - Build supporting environment values such as dependencies, storages, or dispatch queues.
    - Prefix variables with `env` to signal environment context (`let envSession = MockURLSession()`).
+   - Ensure SETUP follows whichever of GIVEN, CAPTURE, and MOCKING are present; omit unused sections without altering the order.
 
-4. **SYSTEM UNDER TEST**
+5. **SYSTEM UNDER TEST**
    - Instantiate the object or function under test and assign it to `sut`. If multiple SUTs are necessary, use `sutPrimary`, `sutSecondary`, etc.
    - Never pass mocks directly—wrap them in `env` variables first to keep this section clean.
 
-5. **WHEN**
+6. **WHEN**
    - Perform the action being tested.
    - Assign results and side effects to `actual*` variables (`let actualResponse = try await sut.execute(...)`).
    - When capturing thrown errors, assign them to `actualError` variables via `XCTAssertThrowsError`.
+   - Move any recorded collaborator state from `capture*` placeholders into `actual*` variables before asserting.
 
-6. **EXPECTATIONS**
+7. **EXPECTATIONS**
    - Define the expected outcomes before assertions.
    - Prefix variables with `expected` and avoid referencing `actual` values in this section.
 
-7. **THEN**
+8. **THEN**
    - Place assertion statements comparing `expected*` to `actual*` values.
    - Do not assert against literals or `given` variables directly; convert them to `expected` values first.
 
-8. **LOGGING / BEHAVIOR** *(if verifying interactions)*
+9. **LOGGING / BEHAVIOR** *(if verifying interactions)*
    - Validate messages captured by a logger, notifications, or delegate calls.
    - Interaction assertions for mocks and spies belong here, not in THEN.
 

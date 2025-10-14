@@ -89,31 +89,39 @@ Each test function uses **capitalized comment headers** to separate the phases:
    - Name variables with the `given` prefix (e.g. `givenRequest`).
    - Build fixtures using small helper constructors or data in `testdata/`.
 
-2. **MOCKING** *(if applicable)*
+2. **CAPTURE** *(if applicable)*
+   - Introduce variables that will hold values captured from collaborators (e.g. arguments recorded by a spy implementation).
+   - Prefix them with `capture` (`var capturePublishedEvent *Event`).
+   - Limit this section to declarations; wire the capture mechanics in MOCKING or SETUP.
+   - Skip CAPTURE entirely when no captured state is required.
+
+3. **MOCKING** *(if applicable)*
    - Configure doubles (`mockClient`, `fakeStore`) created with interfaces or generated tools (e.g. GoMock).
    - Keep mocks minimal; prefer small real implementations when cheaper.
 
-3. **SETUP**
+4. **SETUP**
    - Assemble the environment (e.g. wire dependencies, instantiate struct under test) using variables prefixed with `env`.
    - Assign mocks to production interfaces here (`envStore := mockStore`), not in GIVEN.
+   - Ensure SETUP follows whichever of GIVEN, CAPTURE, and MOCKING are present; omit unused sections without reordering others.
 
-4. **SYSTEM UNDER TEST**
+5. **SYSTEM UNDER TEST**
    - Instantiate the SUT in a variable named `sut` (or `sutFn` for functions returned from factories).
    - The SUT should consume `env*` dependencies produced in SETUP.
 
-5. **WHEN**
+6. **WHEN**
    - Execute the behavior under test and capture outputs in `actual*` variables.
    - Use `t.Helper()` inside helper functions invoked here.
+   - Move any state stored in `capture*` placeholders into `actual*` variables prior to assertions.
 
-6. **EXPECTATIONS**
+7. **EXPECTATIONS**
    - Declare expected values in `expected*` variables, even when simple.
    - Use custom comparison helpers (`cmp.Diff`, `require.Equal`) if values are complex.
 
-7. **THEN**
+8. **THEN**
    - Perform assertions. Prefer `t.Fatalf`/`t.Errorf` with helpful messages or `require/assert` from Testify.
    - Do not assert directly against literals; compare `actual*` to `expected*`.
 
-8. **BEHAVIOR** *(if mocks used)*
+9. **BEHAVIOR** *(if mocks used)*
    - Verify mock interactions (e.g. `require.Equal(t, 1, mockStore.Calls["Save"])`).
    - Ensure every expectation on a mock is asserted; otherwise default to fakes.
 

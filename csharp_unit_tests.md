@@ -133,7 +133,13 @@ The Arrange stage gathers inputs, configures doubles, and exposes collaborators 
 - The GIVEN section should always be the first section in a test, unless there is nothing to define in GIVEN, in which case it should be omitted.
 - **The GIVEN section must not be merged with any other section.**
 
-#### **5.1.2 MOCKING**
+#### **5.1.2 CAPTURE**
+- Declare variables that will hold values captured from mocks, spies, or test fakes.
+- Prefix these placeholders with `capture` (e.g. `capturePublishedMessage`).
+- Keep this section focused on declarations; configure the mechanics that populate them in MOCKING or SETUP.
+- Include CAPTURE only when collaborators expose information that must be asserted later.
+
+#### **5.1.3 MOCKING**
 - Define and configure **mock objects**.
 - Mock variables must be named `mock*`.
 - **Use constructor injection for dependencies**, or use mocking frameworks like Moq.
@@ -372,23 +378,23 @@ public void Test_ServiceCallsDependency()
 }
 ```
 
-#### **5.1.3 SETUP**
+#### **5.1.4 SETUP**
 - Perform all test initialization that prepares the non-mocked environment (e.g., creating `HttpContext`, configuring dependency injection, and setting up request parameters).
 - Variables created in this section should be prefixed with `env*` (e.g. `envHttpContext`, `envActionContext`).
 - When constants or variables are needed in this section that are important for comprehending the test, declare them as `given*` variables instead.
-- SETUP should follow GIVEN unless there is nothing to set up.
+- SETUP should follow the preceding arrangement sections (GIVEN → CAPTURE → MOCKING). Omit intermediate sections when they are unnecessary.
 - SETUP should refer to `given*` variables, not `mock*` variables, except in rare occasions.
 - Assign mock objects to real interface variables in SETUP, using the `env*` prefix (e.g., `envLogger = mockLogger.Object`). The `mock*` variables themselves may only be used in the SETUP and BEHAVIOR sections.
 - **The SETUP section must not be merged with any other section.**
 - If SETUP involves multiple distinct stages (e.g. reading fixtures, wiring dependencies, configuring environment), split it into multiple sub-sections with descriptive comments.
 
-#### **5.1.4 SYSTEM UNDER TEST**
+#### **5.1.5 SYSTEM UNDER TEST**
 - Assign the system under test to a variable named `sut`.
 - If multiple systems are being tested, assign them to separate `sut*` variables.
 - SYSTEM UNDER TEST must never directly reference `mock*` variables; use the `env*` variables initialised in SETUP.
 - **The SYSTEM UNDER TEST section must not be merged with any other section.**
 
-#### **5.1.5 Fixtures: Best Practices**
+#### **5.1.6 Fixtures: Best Practices**
 Reusable fixtures encourage realistic, DRY data that mirrors production scenarios while keeping tests focused on behaviour instead of data plumbing. Inlining bespoke objects everywhere invites duplication, increases maintenance costs when models evolve, and makes it harder to reason about how changes cascade across tests.
 - **Prefer fixtures over mocks**—favour shared, reusable fixtures rather than creating one-off test data.
 - **Instantiate fixtures in the appropriate Arrange subsection (usually GIVEN or SETUP)** and modify them as needed to fit the test's needs.
@@ -483,6 +489,7 @@ The Act stage performs the single behaviour under test. Keep it focused on invok
 - Assign the results to `actual*` variables. This typically captures the return value from invoking the system under test.
   - If later sections need to inspect additional outputs (e.g. side effects or mutated collaborators), assign them to their own `actual*` variables immediately after invocation.
 - If the test needs to use an `env*` value later, assign it to an `actual*` variable in WHEN and use that instead.
+- Move any values stored in `capture*` placeholders into appropriately named `actual*` variables before asserting on them in THEN or BEHAVIOR.
 - **The WHEN section must not be merged with any other section.**
 - When using helpers such as `Assert.Throws`, treat the wrapper as part of WHEN. Store the resulting exception in an `actual*` variable and assert on it in THEN.
 

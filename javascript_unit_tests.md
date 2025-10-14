@@ -119,47 +119,55 @@ making regressions harder to diagnose. Follow the section order below and use de
    - Fixture factories should be invoked here and assigned to `given*` variables before mutation.
    - The GIVEN section must never be merged with any other section.
 
-2. **MOCKING**
+2. **CAPTURE**
+   - Declare placeholders that will receive values captured by mocks, spies, or fakes.
+   - Name these variables with the `capture` prefix (e.g. `let capturePublishedEvent`).
+   - Keep this section limited to variable declarations; configure mocks to populate them in the MOCKING section.
+   - Only include this section when the test truly needs to read captured collaborator state.
+
+3. **MOCKING**
    - Create and configure mocks or fakes.
    - Mock variables must start with `mock` and fakes with `fake`.
    - Use Jest helpers (`jest.fn`, `jest.mock`, `vi.fn`, etc.) for dependencies.
    - Complex mocking logic may be split into sub-sections with additional descriptive comments.
    - The MOCKING section must not be merged with other sections.
 
-3. **SETUP**
+4. **SETUP**
    - Prepare environment objects (e.g. request objects, dependency wiring).
    - Variables created here must use the `env` prefix (e.g. `const envRequest = …`).
    - Assign mock instances to `env*` variables before passing them to the system under test.
    - Reference `given*` data rather than literal values whenever possible.
+   - Ensure SETUP follows the preceding arrangement sections (GIVEN → CAPTURE → MOCKING); omit intermediate sections when they are unnecessary.
    - The SETUP section must not be merged with other sections.
 
-4. **SYSTEM UNDER TEST**
+5. **SYSTEM UNDER TEST**
    - Instantiate the unit under test and assign it to `sut` (or `sutSomething` when multiple instances exist).
    - Do not pass `mock*` variables directly; always pass `env*` wrappers.
    - The SYSTEM UNDER TEST section must stand alone.
 
-5. **WHEN**
+6. **WHEN**
    - Execute the action under test and assign outcomes to `actual*` variables.
    - Capture all asynchronous results with `await` and store them in `actual*` variables for later assertions.
    - When a test needs to inspect mutated `env*` values later, copy them into an `actual*` variable here.
+   - Move any values stored in `capture*` placeholders into `actual*` variables before asserting on them.
    - The WHEN section must not be merged with other sections.
 
-6. **EXPECTATIONS**
+7. **EXPECTATIONS**
    - Define expected values before any assertions.
    - Expected values must use the `expected` prefix.
    - Do not reference `actual*` variables in this section.
    - The EXPECTATIONS section must appear between WHEN and THEN and cannot be merged with other sections.
 
-7. **THEN**
+8. **THEN**
    - Assert that `actual*` values match `expected*` values.
    - Never assert directly against literals or `given*` values.
    - Keep assertions focused on state validation; interaction verification belongs in BEHAVIOR.
 
-8. **LOGGING** (optional)
+9. **LOGGING** (optional)
    - Validate structured logs captured during execution (e.g. via fakes or spy transports).
    - Prefer log assertions when they clearly indicate which branch executed.
 
-9. **BEHAVIOR**
+10. **BEHAVIOR**
    - Verify interactions with mocks or fakes (e.g. `expect(mockService.login).toHaveBeenCalledWith(…)`).
    - This section is mandatory whenever mocks are used.
    - All verifiable mock expectations must be checked here. Do not leave implicit expectations.
