@@ -696,3 +696,13 @@ The guidelines above are intentionally prescriptive so tests remain predictable 
 - When you break a rule, **document the rationale inline** (e.g. with a comment or PHPDoc) so future maintainers understand why the exception exists.
 - Re-evaluate exceptions periodically. If the surrounding production code changes, the original constraint may disappear and the standard structure can be restored.
 
+Common shortcuts you may encounter include:
+- **Assigning captured values directly to `actual*` variables or hosting them in a `WHEN` section before `MOCKING`.** This keeps the structure short but hides the intent that `CAPTURED` makes explicit. Use it sparingly and only when the setup is trivial.
+- **Declaring captured variables in the same `MOCKING` or `SETUP` section as their scaffolding.** It works, yet blends responsibilities and makes it harder to see which lines exist solely to capture output.
+- **Skipping section comments for tiny operations.** A lone variable assignment or simple assertion can speak for itself, but be sure the omission truly reduces noise instead of forcing the reader to infer structure.
+- **Dropping the `EXPECTATIONS` section and asserting directly on `given*` variables in `THEN`.** This saves a couple of lines, yet sacrifices the symmetry that helps reviewers scan intent. Prefer keeping `EXPECTATIONS`, especially because an AI assistant can generate it automatically.
+- **Asserting on the SUT output without first assigning sub-components to `actual*` variables.** Inline property access or array indexing is quicker to type, but intermediate variables make it obvious what the test is examining.
+- **Passing `mock*` variables straight into the SUT without promoting them to `env*` variables.** The shortcut obscures which collaborators the SUT receives and blurs the mock-versus-environment boundary, particularly with frameworks that require `->reveal()`/`->object` syntax.
+
+While humans occasionally bend these rules to communicate intent efficiently, AI tools should rarely do so. Automated authorship can produce the full structured form with minimal effort, so generated tests are expected to adhere strictly to the conventions above.
+
