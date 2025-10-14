@@ -137,6 +137,8 @@ The Arrange stage gathers inputs, configures doubles, and exposes collaborators 
 - Declare variables that will hold values captured from mocks, spies, or test fakes.
 - Prefix these placeholders with `capture` (e.g. `capturePublishedMessage`).
 - Keep this section focused on declarations; configure the mechanics that populate them in MOCKING or SETUP.
+- Position CAPTURE immediately after GIVEN and before MOCKING whenever it is present.
+- Promote capture placeholders into `actual*` variables during WHEN so assertions always reference concrete results.
 - Include CAPTURE only when collaborators expose information that must be asserted later.
 
 #### **5.1.3 MOCKING**
@@ -282,7 +284,7 @@ public void Test_ProcessBranch_LogsTraceMessage_WithMock()
 
 Even a simple log assertion requires `It.Is<It.IsAnyType>` gymnastics, reflection to examine anonymous types, and a final `Verify()` call. The fake-based version hides that complexity and offers a single, intention-revealing `AssertExercised` method. When mocks feel this gnarly, prefer a fake.
 
-**✅ Example with `env*` indirection (clean SUT construction):**
+**✅ Example with capture variables and `env*` indirection (clean SUT construction):**
 ```csharp
 [Fact]
 public async Task Test_SubmitOrder_SchedulesShipment()
@@ -291,13 +293,20 @@ public async Task Test_SubmitOrder_SchedulesShipment()
     Guid givenOrderId = Guid.NewGuid();
     Order givenOrder = new(givenOrderId, ShipImmediately: true);
 
+    // CAPTURE: observe the scheduled shipment sent to the message bus
+    ShipmentScheduled? capturePublishedShipment = null;
+
     // MOCKING: configure repository, clock, and message bus behaviors
     Mock<IOrderRepository> mockRepository = new(MockBehavior.Strict);
     mockRepository.Setup(repo => repo.GetAsync(givenOrderId)).ReturnsAsync(givenOrder).Verifiable();
     Mock<ISystemClock> mockClock = new(MockBehavior.Strict);
     mockClock.Setup(clock => clock.UtcNow).Returns(DateTimeOffset.Parse("2024-01-01T12:00:00Z")).Verifiable();
     Mock<IMessageBus> mockMessageBus = new(MockBehavior.Strict);
-    mockMessageBus.Setup(bus => bus.PublishAsync(It.IsAny<ShipmentScheduled>())).Returns(Task.CompletedTask).Verifiable();
+    mockMessageBus
+        .Setup(bus => bus.PublishAsync(It.IsAny<ShipmentScheduled>()))
+        .Callback<ShipmentScheduled>(message => capturePublishedShipment = message)
+        .Returns(Task.CompletedTask)
+        .Verifiable();
 
     // SETUP: expose the mocks through the environment dependencies used by the SUT
     IOrderRepository envRepository = mockRepository.Object;
@@ -310,8 +319,17 @@ public async Task Test_SubmitOrder_SchedulesShipment()
 
     // WHEN: exercise the behavior under test
     await sut.SubmitOrderAsync(givenOrderId);
+    ShipmentScheduled? actualPublishedShipment = capturePublishedShipment;
 
-    // ... THEN and BEHAVIOR sections omitted for brevity ...
+    // EXPECTATIONS: the shipment should reference the order id from GIVEN
+    Guid expectedOrderId = givenOrderId;
+
+    // THEN: verify the captured message matches expectations
+    Assert.NotNull(actualPublishedShipment);
+    Assert.Equal(expectedOrderId, actualPublishedShipment!.OrderId);
+
+    // BEHAVIOR: ensure the message bus publish call occurred
+    mockMessageBus.Verify();
 }
 ```
 
