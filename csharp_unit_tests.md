@@ -114,255 +114,63 @@ public void Test_MultipleCases() // ❌ Tests multiple things at once
 
 ## **5. Test Method Sectioning**
 Standardized sections carve complex tests into digestible steps, making it easier to see how inputs flow through mocks and the system under test. Without this structure tests devolve into monolithic blocks where intent, setup, and verification intermingle, obscuring bugs and encouraging brittle copy-paste patterns. The ordering rules below are intentionally strong to build reliable habits—refer to [**Section 17. Breaking the Rules**](#-17-breaking-the-rules) for guidance on the rare cases where deviating is justified.
+
+The high-level **Arrange–Act–Assert (AAA)** pattern is the conceptual root of this style guide: *Arrange* prepares the world, *Act* exercises the behaviour, and *Assert* verifies the outcome. AAA is intentionally coarse-grained—perfect for short, simple unit tests—but it starts to creak once a scenario grows beyond a handful of lines. That is where the richer sectioning described below shines. You can adopt only the headline sections for straightforward tests, add descriptive comment headers as complexity grows, and even split an individual section into multiple focused subsections (e.g., `// MOCKING: the database contains the given record` followed by `// MOCKING: the accounting API rejects the record`) when the test demands it.
+
 Each test method follows a structured format, **separated by clear comments**:
-- Where possible, the order of sections should be as it is presented below.
-- Empty sections should be omitted.
-- In some cases, it may be justifiable to have multiple instances of specific sections
-- When a single **MOCKING** or **SETUP** block becomes large or involves multiple distinct steps, split it into smaller sub-sections with their own human-readable comment headers (e.g. `// SETUP: Configure HTTP client factory` and `// SETUP: Initialize environment variables`), so readers can quickly grasp each part.
-- Section comment headers should be written as full descriptive sentences (e.g. `// GIVEN: A valid context and wash code details`), not terse labels. If a section would contain only a trivial one-line line of code without setup complexity, you may omit its own comment.
+- Follow the Arrange → Act → Assert order unless a section is unnecessary; omit empty sections entirely.
+- Section comment headers should be full descriptive sentences (e.g. `// GIVEN: A valid context and wash code details`), not terse labels.
+- When a single section becomes long, divide it with additional human-readable sub-headers so readers can scan for intent quickly.
 
-### **Standard Sections:**
+### **5.1 Arrange**
+The Arrange stage gathers inputs, configures doubles, and exposes collaborators to the system under test. Keeping all preparation here prevents leakage of setup noise into later sections.
 
-The following sections are defined for a well structured test.
+#### **5.1.1 GIVEN**
+- Set up initial conditions and inputs.
+- Assign variables with the prefix `given`.
+- When test fixtures are used, allocate them in this section.
+- **Test Fixture classes** should be named `Fixture*` and assigned to `given*` variables prior to use.
+- The GIVEN section should always be the first section in a test, unless there is nothing to define in GIVEN, in which case it should be omitted.
+- **The GIVEN section must not be merged with any other section.**
 
-1. **GIVEN**
-   - Set up initial conditions and inputs.
-   - Assign variables with the prefix `given`.
-   - when test fixtures are used, they should be allocated in this section
-   - **Test Fixture classes** should be named `Fixture*` and assigned to `given*` variables prior to use.
-   - The GIVEN section should always be the first section in a test, unless there is nothing to define in GIVEN, in which case it should be omitted.
-   - **The GIVEN section must not be merged with any other section**
+#### **5.1.2 MOCKING**
+- Define and configure **mock objects**.
+- Mock variables must be named `mock*`.
+- **Use constructor injection for dependencies**, or use mocking frameworks like Moq.
+- The MOCKING section should occur before the SETUP section, or be omitted if no mocking is required. Under special circumstances it may be placed after SETUP.
+- **The MOCKING section must not be merged with any other section.**
+- When mocking logic has multiple responsibilities (e.g. creating fakes and configuring behaviours), split it into sub-headers such as `// MOCKING: Create mock objects` and `// MOCKING: Configure mock responses`.
 
-1. **MOCKING**
-   - Define and configure **mock objects**.
-   - Mock variables must be named `mock*`.
-   - **Use constructor injection for dependencies**, or use mocking frameworks like Moq.
-   - The MOCKING section should occur before the SETUP section, or be omitted if no mocking is required. Under special circumstances described above, it may be placed after the SETUP section.
-   - **The MOCKING section must not be merged with any other section**
-   - **If mocking logic itself has multiple responsibilities (e.g. creating fakes and configuring behaviors), split into sub-headers** (e.g. `// MOCKING: Create mock objects` and `// MOCKING: Configure mock responses`).
-
-1. **SETUP**
-   - perform all test initialization that prepares the non-mocked environment (e.g., creating HttpContext, configuring dependency injection, and setting up request parameters)
-   - variables created in this section should be prefixed with `env*` (e.g. envHttpContext, envActionContext)
-   - when constants or variables are needed in this section that are important for the overall comprehensibility of the test, they should be declared in variables in the GIVEN section instead
-   - the SETUP section should follow the GIVEN section, unless there is nothing to setup in SETUP, in which case it should be omitted
-   - the SETUP section should refer to GIVEN variables, not `mock*` variables, except in rare occasions
-   - Assign mock objects to real interface variables in the SETUP section, using the env* prefix (e.g., envLogger = mockLogger.Object). The mock variables themselves may only be used in the SETUP and BEHAVIOR sections.
-   - **The SETUP section must not be merged with any other section**
-   - **If SETUP involves multiple distinct stages (e.g. reading fixtures, wiring dependencies, configuring environment), split into multiple sub-sections with descriptive comments.**
-
-1. **SYSTEM UNDER TEST**
-   - Assigns the system under test to a variable named `sut`
-   - if multiple systems are being tested for some reason, assign them to separate`sut*` variables.
-   - The SYSTEM UNDER TEST must never directly reference mock* variables. It must use the env* variables initialized in SETUP.
-   - **The SYSTEM UNDER TEST section must not be merged with any other section**
-
-1. **WHEN**
-   - Perform the action or method call being tested.
-   - Assign the results to `actual*` variables. This would typically be the return value received from invoking the system under test.
-     - If the test requires asserting against other results in the THEN section or BEHAVIOR section, then use the opportunity
-       to assign those results to their own `actual*` variables, e.g. after invoking the system under test.
-   - If the test needs to use an `env*` in later sections, then assign them to `actual*` variables in WHEN and use those instead.
-   - **The WHEN section must not be merged with any other section**
-
-1. **EXPECTATIONS**
-   - Define expected values **before assertions**.
-   - Expected values must be assigned to `expected*` variables.
-   - The EXPECTATIONS section should be strictly placed after WHEN and before THEN
-   - This section should not refer to any `actual*` variables
-   - **The EXPECTATIONS section must not be merged with any other section**
-
-1. **THEN**
-   - Perform **assertions** comparing actual results to expected values.
-   - **Never assert against literals**—always use `expected*` variables.
-   - **The THEN section must not be merged with any other section**
-
-1. **LOGGING**
-   - Verify any behavior that can be validated via captured logging operations.
-   - Log the behavior of the code under test at appropriate levels (including trace-level logging with extensive details).
-   - In unit tests, assert against log entries in the LOGGING section to confirm that the intended execution branch was exercised.
-   - **Prefer asserting on emitted logs over (or in addition to) mock verifications** whenever possible: log-based assertions are simpler to write and review, and often replace complex mock setups (e.g., capturing parameters).
-   - Each unit test should explicitly verify that the execution branch it is meant to cover is taken, reducing false positives when setup does not exercise the desired branch.
-
-
-1. **BEHAVIOR**
-   - Contains assertions for **mock interactions** (e.g., `mockService.Verify(x => x.DoSomething(), Times.Once());`).
-   - This section **must be present if mocks are used**.
-   - **The BEHAVIOR section must not be merged with any other section**
-   - **All mocks must be created as verifiable**—either using `new Mock<T>(MockBehavior.Strict)` or by calling `.Verifiable()` on each `.Setup(...)`.
-   - **Every verifiable setup must be explicitly verified** in this section via `mock.Verify(...)` or `mock.VerifyAll()`. Unverified mocks should cause the test to fail.
-
-✅ **Good Example:**
-```csharp
-[Test]
-public void Test_ProcessData_ReturnsCorrectValue()
-{
-    // GIVEN
-    var givenInput = "sample";
-
-    // SYSTEM UNDER TEST
-    var sut = new DataService();
-
-    // WHEN
-    var actualResult = sut.ProcessData(givenInput);
-    var actualSideEffect = Foo.Bar();
-
-    // EXPECTATIONS
-    var expectedResult = "processed_sample";
-    var expectedSideEffect = "fubar";
-
-    // THEN
-    Assert.AreEqual(expectedResult, actualResult);
-    Assert.AreEqual(expectedSideEffect, actualSideEffect);
-}
-```
-
-🚫 **Bad Example:**
-```csharp
-[Test]
-public void Test_ProcessData_ReturnsCorrectValue()
-{
-    // MOCKING
-    Mock<IFoo> mockFoo = new();
-
-    // SYSTEM UNDER TEST
-    var sut = new DataService(mockFoo.Object);
-}
-```
-
-
-
----
-
-## **6. Fixtures: Best Practices**
-Reusable fixtures encourage realistic, DRY data that mirrors production scenarios while keeping tests focused on behavior instead of data plumbing. Inlining bespoke objects everywhere invites duplication, increases maintenance costs when models evolve, and makes it harder to reason about how changes cascade across tests.
-- **Prefer fixtures over mocks**—favor shared, reusable fixtures rather than creating one-off test data. Fixtures help keep your tests DRY and consistent, and allow them to work on more accurate test data.
-- **Instantiate fixtures in the appropriate section** e.g. GIVEN or SETUP, and modify it as needed to fit the test's needs.
-- **Use a sharable fixture factory** instead of creating fixtures or complex test data inline
-
-✅ **Good Example:**
-```csharp
-
-public static class Fixtures {
-
-    public static string IpAddress()
-    {
-        return "192.168.1.1";
-    }
-
-    public static CwConfig CwConfig()
-    {
-        return new CwConfig { Terminals = new List<HardwareTerminalConfig>() };
-    }
-
-    public static CwGetTerminalConfigCommand CwGetTerminalConfigCommand()
-    {
-        string givenIpAddress = IpAddress();
-        return new CwGetTerminalConfigCommand { TerminalFixedIpAddress = givenIpAddress };
-    }
-
-    public static CommandContext<CwGetTerminalConfigCommand, CwGetTerminalConfigResult> CommandContext()
-    {
-        return new CommandContext<CwGetTerminalConfigCommand, CwGetTerminalConfigResult>
-        {
-            Command = CwGetTerminalConfigCommand()
-        };
-    }
-}
-
-public class CarWashesServiceTests
-{
-    [Test]
-    public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExist()
-    {
-        // GIVEN
-        var givenTerminalIp = Fixtures.IpAddress();
-        var givenCommandContext = Fixtures.CommandContext();
-        var givenCarWashesConfig = Fixtures.CwConfig();
-
-        // SYSTEM UNDER TEST
-        var sut = new CarWashesService();
-
-        // WHEN
-        await sut.GetTerminalConfig(givenCommandContext);
-        var actualStatusCode = givenCommandContext.StatusCode;
-        var actualResult = givenCommandContext.Result;
-
-        // EXPECTATIONS
-        var expectedStatusCode = HttpStatusCode.NotFound;
-        CwGetTerminalConfigResult expectedResult = null;
-
-        // THEN
-        Assert.Equal(expectedStatusCode, actualStatusCode);
-        Assert.Equal(expectedResult, actualResult);
-    }
-}
-```
-
-🚫 **Bad Example:**
-```csharp
-[Test]
-public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExist()
-{
-    // GIVEN
-    var givenTerminalIp = "192.168.1.1";
-    var givenCommandContext = new CommandContext<CwGetTerminalConfigCommand, CwGetTerminalConfigResult>
-    {
-        Command = new CwGetTerminalConfigCommand { TerminalFixedIpAddress = givenTerminalIp }
-    };
-    var givenCarWashesConfig = new CwConfig { Terminals = new List<HardwareTerminalConfig>() };
-    StaticConfig.CarWashesConfig = givenCarWashesConfig;
-
-    // SYSTEM UNDER TEST
-    var sut = new CarWashesService();
-
-    // WHEN
-    await sut.GetTerminalConfig(givenCommandContext);
-    var actualStatusCode = givenCommandContext.StatusCode;
-    var actualResult = givenCommandContext.Result;
-
-    // EXPECTATIONS
-    var expectedStatusCode = HttpStatusCode.NotFound;
-    CwGetTerminalConfigResult expectedResult = null;
-
-    // THEN
-    Assert.Equal(expectedStatusCode, actualStatusCode);
-    Assert.Equal(expectedResult, actualResult);
-}
-```
-
----
-
-## **7. Mocking: Best Practices**
+##### **Mocking Best Practices**
 Disciplined mocking keeps tests readable and trustworthy by ensuring only true collaborators are simulated and their expectations are explicit. Unrestrained mocks create brittle, implementation-driven tests that break on harmless refactors, mask missing coverage of dependencies, and clutter SUT construction with framework boilerplate.
 - **Never mock what you don't have to**—prefer fixtures or real instances where practical.
-- **Only mock things that the system-under-test uses directly**—this ensures that your test exercises the SUT properly, without falling into the trap of combinatorial execution path counts as call-depth increases.
-- The systems that your SUT uses directly should be covered by their own direct unit tests, not by the unit tests of your SUT.
+- **Only mock things that the system-under-test uses directly** so the test exercises the right collaborators.
+- Dependencies that your SUT consumes should have their own unit tests rather than being re-verified indirectly.
 - **Use Moq or built-in mocking frameworks** for dependency injection.
-- **Assertions on mock interactions go in the BEHAVIOR section, not in the THEN section**.
-- **Mocks must never be passed directly to the system under test.** Instead, assign mocks to interface-conforming env* variables in SETUP and pass those to the SUT.
-- Following this pattern keeps the SUT construction readable: the MOCKING section owns the intricate setup, the SETUP section exposes the ready-to-use interfaces via `env*` variables, and the SYSTEM UNDER TEST section reads like a clean recipe that highlights only the essential collaborators. Without the intermediate `env*` assignments the constructor or method invocation under test quickly devolves into a wall of `.Object` accessors and configuration noise, making it difficult for reviewers to decipher which dependency is which.
+- **Assertions on mock interactions belong in the BEHAVIOR section, not in THEN.**
+- **Mocks must never be passed directly to the system under test.** Assign mocks to interface-conforming `env*` variables in SETUP and pass those to the SUT.
+- This pattern keeps SUT construction readable: MOCKING owns the intricate setup, SETUP exposes ready-to-use interfaces via `env*`, and SYSTEM UNDER TEST reads like a clean recipe. Skipping the indirection devolves constructor calls into walls of `.Object` accessors that reviewers must mentally untangle.
 
-### **7.1 Test Fakes (a.k.a. Dummies)**
-Test fakes are lightweight, purpose-built implementations of an interface that you author specifically for the test suite. They shine when mocking frameworks become gnarly—especially for complex interaction verification or structured log inspection—because you can write direct, intention-revealing code without wrestling with callback signatures or argument matchers.
+###### **Test Fakes (a.k.a. Dummies)**
+Test fakes are lightweight, purpose-built implementations of an interface that you author specifically for the test suite. They shine when mocking frameworks become gnarly—especially for complex interaction verification or structured log inspection—because you can write intention-revealing code without wrestling with callback signatures or argument matchers.
 
-- **Create fakes when setup or verification with a mock would be noisy, repetitive, or brittle.** If verifying interactions through a mocking framework requires delegates, reflection, or deeply nested `It.Is` expressions, a fake is often clearer.
-- **Name fake instances with the `fake*` prefix and construct them in the MOCKING section.** This keeps parity with mock naming so readers instantly recognize simulated collaborators.
-- **Assign each `fake*` variable to an `env*` variable in the SETUP section before handing it to the SUT.** Treat a fake like any other dependency so the SYSTEM UNDER TEST section stays clean and only references `env*` collaborators.
-- **Interact with the fake via its `fake*` variable in the THEN, LOGGING, and BEHAVIOR sections.** Fakes frequently expose custom assertion helpers (e.g., `fakeLogger.AssertExercised(...)`) that capture behavior without `mock.Verify(...)` boilerplate.
-- **Document expectations inside the fake when possible.** Purpose-built helpers (such as storing structured log entries) make intent obvious and reduce duplicated parsing logic across tests.
+- **Create fakes when setup or verification with a mock would be noisy, repetitive, or brittle.** If verifying interactions requires delegates, reflection, or deeply nested `It.Is` expressions, a fake is often clearer.
+- **Name fake instances with the `fake*` prefix and construct them in the MOCKING section** so readers instantly recognise simulated collaborators.
+- **Assign each `fake*` variable to an `env*` variable in SETUP before handing it to the SUT**, keeping SYSTEM UNDER TEST clean.
+- **Interact with the fake via its `fake*` variable in the THEN, LOGGING, and BEHAVIOR sections.** Fakes often expose custom assertion helpers that capture behaviour without `mock.Verify(...)` boilerplate.
+- **Document expectations inside the fake when possible.** Purpose-built helpers make intent obvious and reduce duplicated parsing logic across tests.
 
-#### Strengths Compared to Mocks
-- **Readable behavior verification.** Fakes encapsulate the verification logic in methods that read like English, avoiding the visual clutter of `Times.Once()` and `It.IsAny<T>()` chains.
-- **Reduced setup friction.** Because you own the implementation, you can build constructors and helper methods that mirror your domain vocabulary, instead of contorting the SUT to satisfy framework APIs.
-- **Deterministic assertions.** Fakes can capture state (e.g., recorded log entries) and expose first-class assertions, lowering the risk of brittle, order-dependent mock verifications.
+**Strengths Compared to Mocks**
+- **Readable behaviour verification.** Fakes encapsulate verification logic in methods that read like English, avoiding the visual clutter of `Times.Once()` and `It.IsAny<T>()` chains.
+- **Reduced setup friction.** You control the implementation, so constructors and helpers can mirror your domain vocabulary.
+- **Deterministic assertions.** Fakes can capture state (for example, recorded log entries) and expose first-class assertions, lowering the risk of brittle, order-dependent verifications.
 
-#### Weaknesses Compared to Mocks
-- **Maintenance cost.** You must maintain the fake implementation alongside production interfaces. If the interface evolves, the fake must be updated manually.
-- **Limited behavioral coverage.** A fake typically encodes only the paths needed by the current test suite. Mocks can dynamically configure behaviors per test without editing shared code.
-- **Risk of drifting from reality.** Because a fake is handwritten, it might omit subtle behavior the real dependency exhibits. Use fixtures and integration tests to guard against divergence.
+**Weaknesses Compared to Mocks**
+- **Maintenance cost.** You must maintain the fake implementation alongside production interfaces.
+- **Limited behavioural coverage.** A fake typically encodes only the paths needed by the current test suite.
+- **Risk of drifting from reality.** Because a fake is handwritten, it might omit subtle behaviour the real dependency exhibits; fixtures and integration tests guard against divergence.
 
-#### Example: Logging with a Fake vs. a Mock
+**Example: Logging with a Fake vs. a Mock**
 Consider a service that logs a structured trace message—`"Foo(branch=bar): the foo is quite barred"`—whenever it processes a branch.
 
 **✅ Fake-based test (clean and intention revealing):**
@@ -384,8 +192,6 @@ public void Test_ProcessBranch_LogsTraceMessage()
 
     // WHEN: process the branch
     sut.ProcessBranch(givenBranchId);
-
-    // THEN: log assertions belong in LOGGING or BEHAVIOR
 
     // LOGGING: ensure the trace message was written
     fakeLogger.AssertExercised("Foo", "bar");
@@ -528,9 +334,7 @@ public async Task Test_SubmitOrder_SchedulesShipment()
 ```
 In the second snippet the constructor is dominated by mock plumbing, forcing the reader to mentally map each `.Object` back to the earlier declarations. By contrast, the first snippet lets the SYSTEM UNDER TEST section focus on the collaborators themselves (`envRepository`, `envClock`, etc.), so the purpose of each dependency remains obvious even when the setup logic is complex.
 - **Prefer verifying log output in addition to mock verifications**—capturing and asserting on log entries is usually easier to implement correctly, more readable for future maintainers, and often avoids the “gnarly” setup required to capture mock parameters.
-- **All mocks must be created in verifiable mode**:
-  - Use `new Mock<T>(MockBehavior.Strict)` to catch any unexpected calls, _or_
-  - Call `.Verifiable()` on each `mock.Setup(...)` you intend to verify.
+- **All mocks must be created in verifiable mode**: use `new Mock<T>(MockBehavior.Strict)` to catch unexpected calls or call `.Verifiable()` on each `mock.Setup(...)` you intend to verify.
 - **Every mock setup must be verified in the BEHAVIOR section** via `mock.Verify(...)` or `mock.VerifyAll()`; unverified verifiable mocks should fail the test.
 
 ✅ **Good Example:**
@@ -568,8 +372,186 @@ public void Test_ServiceCallsDependency()
 }
 ```
 
----
+#### **5.1.3 SETUP**
+- Perform all test initialization that prepares the non-mocked environment (e.g., creating `HttpContext`, configuring dependency injection, and setting up request parameters).
+- Variables created in this section should be prefixed with `env*` (e.g. `envHttpContext`, `envActionContext`).
+- When constants or variables are needed in this section that are important for comprehending the test, declare them as `given*` variables instead.
+- SETUP should follow GIVEN unless there is nothing to set up.
+- SETUP should refer to `given*` variables, not `mock*` variables, except in rare occasions.
+- Assign mock objects to real interface variables in SETUP, using the `env*` prefix (e.g., `envLogger = mockLogger.Object`). The `mock*` variables themselves may only be used in the SETUP and BEHAVIOR sections.
+- **The SETUP section must not be merged with any other section.**
+- If SETUP involves multiple distinct stages (e.g. reading fixtures, wiring dependencies, configuring environment), split it into multiple sub-sections with descriptive comments.
 
+#### **5.1.4 SYSTEM UNDER TEST**
+- Assign the system under test to a variable named `sut`.
+- If multiple systems are being tested, assign them to separate `sut*` variables.
+- SYSTEM UNDER TEST must never directly reference `mock*` variables; use the `env*` variables initialised in SETUP.
+- **The SYSTEM UNDER TEST section must not be merged with any other section.**
+
+#### **5.1.5 Fixtures: Best Practices**
+Reusable fixtures encourage realistic, DRY data that mirrors production scenarios while keeping tests focused on behaviour instead of data plumbing. Inlining bespoke objects everywhere invites duplication, increases maintenance costs when models evolve, and makes it harder to reason about how changes cascade across tests.
+- **Prefer fixtures over mocks**—favour shared, reusable fixtures rather than creating one-off test data.
+- **Instantiate fixtures in the appropriate Arrange subsection (usually GIVEN or SETUP)** and modify them as needed to fit the test's needs.
+- **Use a sharable fixture factory** instead of creating fixtures or complex test data inline.
+
+✅ **Good Example:**
+```csharp
+public static class Fixtures
+{
+    public static string IpAddress() => "192.168.1.1";
+
+    public static CwConfig CwConfig() => new() { Terminals = new List<HardwareTerminalConfig>() };
+
+    public static CwGetTerminalConfigCommand CwGetTerminalConfigCommand()
+    {
+        string givenIpAddress = IpAddress();
+        return new CwGetTerminalConfigCommand { TerminalFixedIpAddress = givenIpAddress };
+    }
+
+    public static CommandContext<CwGetTerminalConfigCommand, CwGetTerminalConfigResult> CommandContext() => new()
+    {
+        Command = CwGetTerminalConfigCommand()
+    };
+}
+
+public class CarWashesServiceTests
+{
+    [Test]
+    public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExist()
+    {
+        // GIVEN
+        var givenTerminalIp = Fixtures.IpAddress();
+        var givenCommandContext = Fixtures.CommandContext();
+        var givenCarWashesConfig = Fixtures.CwConfig();
+
+        // SYSTEM UNDER TEST
+        var sut = new CarWashesService();
+
+        // WHEN
+        await sut.GetTerminalConfig(givenCommandContext);
+        var actualStatusCode = givenCommandContext.StatusCode;
+        var actualResult = givenCommandContext.Result;
+
+        // EXPECTATIONS
+        var expectedStatusCode = HttpStatusCode.NotFound;
+        CwGetTerminalConfigResult expectedResult = null;
+
+        // THEN
+        Assert.Equal(expectedStatusCode, actualStatusCode);
+        Assert.Equal(expectedResult, actualResult);
+    }
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+[Test]
+public async Task Test_GetTerminalConfig_ReturnsNotFound_WhenTerminalDoesNotExist()
+{
+    // GIVEN
+    var givenTerminalIp = "192.168.1.1";
+    var givenCommandContext = new CommandContext<CwGetTerminalConfigCommand, CwGetTerminalConfigResult>
+    {
+        Command = new CwGetTerminalConfigCommand { TerminalFixedIpAddress = givenTerminalIp }
+    };
+    var givenCarWashesConfig = new CwConfig { Terminals = new List<HardwareTerminalConfig>() };
+    StaticConfig.CarWashesConfig = givenCarWashesConfig;
+
+    // SYSTEM UNDER TEST
+    var sut = new CarWashesService();
+
+    // WHEN
+    await sut.GetTerminalConfig(givenCommandContext);
+    var actualStatusCode = givenCommandContext.StatusCode;
+    var actualResult = givenCommandContext.Result;
+
+    // EXPECTATIONS
+    var expectedStatusCode = HttpStatusCode.NotFound;
+    CwGetTerminalConfigResult expectedResult = null;
+
+    // THEN
+    Assert.Equal(expectedStatusCode, actualStatusCode);
+    Assert.Equal(expectedResult, actualResult);
+}
+```
+
+### **5.2 Act**
+The Act stage performs the single behaviour under test. Keep it focused on invoking the SUT so reviewers can immediately spot what triggers the scenario.
+
+#### **5.2.1 WHEN**
+- Perform the action or method call being tested.
+- Assign the results to `actual*` variables. This typically captures the return value from invoking the system under test.
+  - If later sections need to inspect additional outputs (e.g. side effects or mutated collaborators), assign them to their own `actual*` variables immediately after invocation.
+- If the test needs to use an `env*` value later, assign it to an `actual*` variable in WHEN and use that instead.
+- **The WHEN section must not be merged with any other section.**
+- When using helpers such as `Assert.Throws`, treat the wrapper as part of WHEN. Store the resulting exception in an `actual*` variable and assert on it in THEN.
+
+### **5.3 Assert**
+The Assert stage records expectations up front and verifies them explicitly. Separating the declaration of expectations from the assertions themselves keeps the intent clear and prevents verification from being scattered throughout the test.
+
+#### **5.3.1 EXPECTATIONS**
+- Define expected values **before assertions**.
+- Assign expected values to `expected*` variables.
+- Place EXPECTATIONS strictly after WHEN and before THEN.
+- This section should not refer to any `actual*` variables.
+- **The EXPECTATIONS section must not be merged with any other section.**
+
+#### **5.3.2 THEN**
+- Perform **assertions** comparing actual results to expected values.
+- **Never assert against literals**—always use `expected*` variables.
+- **The THEN section must not be merged with any other section.**
+
+#### **5.3.3 LOGGING**
+- Verify any behaviour that can be validated via captured logging operations.
+- Prefer asserting on emitted logs over (or in addition to) mock verifications; log-based assertions are simpler to write and review and often replace complex mock setups.
+- Each unit test should explicitly verify that the execution branch it is meant to cover is taken, reducing false positives when setup does not exercise the desired branch.
+
+#### **5.3.4 BEHAVIOR**
+- Contains assertions for **mock interactions** (e.g., `mockService.Verify(x => x.DoSomething(), Times.Once());`).
+- This section **must be present if mocks are used**.
+- **The BEHAVIOR section must not be merged with any other section.**
+- **All mocks must be created as verifiable**—either using `new Mock<T>(MockBehavior.Strict)` or by calling `.Verifiable()` on each `.Setup(...)`.
+- **Every verifiable setup must be explicitly verified** in this section via `mock.Verify(...)` or `mock.VerifyAll()`. Unverified mocks should cause the test to fail.
+
+✅ **Good Example:**
+```csharp
+[Test]
+public void Test_ProcessData_ReturnsCorrectValue()
+{
+    // GIVEN
+    var givenInput = "sample";
+
+    // SYSTEM UNDER TEST
+    var sut = new DataService();
+
+    // WHEN
+    var actualResult = sut.ProcessData(givenInput);
+    var actualSideEffect = Foo.Bar();
+
+    // EXPECTATIONS
+    var expectedResult = "processed_sample";
+    var expectedSideEffect = "fubar";
+
+    // THEN
+    Assert.AreEqual(expectedResult, actualResult);
+    Assert.AreEqual(expectedSideEffect, actualSideEffect);
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+[Test]
+public void Test_ProcessData_ReturnsCorrectValue()
+{
+    // MOCKING
+    Mock<IFoo> mockFoo = new();
+
+    // SYSTEM UNDER TEST
+    var sut = new DataService(mockFoo.Object);
+}
+```
+
+---
 ## **8. Assertions & Variable Naming**
 Strict naming patterns for expected and actual values highlight the difference between inputs, outputs, and verifications, which speeds up failure analysis. Mixing literals and setup variables inside assertions hides intent, makes diffs noisy, and increases the chance of asserting against the wrong data.
 - **Expected values** always assign input values (from the GIVEN section) to `expected*` variables in the EXPECTATIONS section if you intend to assert on them in the THEN or BEHAVIOR sections.
