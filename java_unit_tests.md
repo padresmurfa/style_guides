@@ -133,14 +133,7 @@ The following sections are defined for a well structured test.
    - The GIVEN section should always be the first section in a test, unless there is nothing to define in GIVEN, in which case it should be omitted.
    - **The GIVEN section must not be merged with any other section.**
 
-2. **CAPTURE**
-   - Declare variables that will hold values captured from mocks or fakes.
-   - Prefix captured placeholders with `capture` (e.g., `capturePublishedEvent`).
-   - The CAPTURE section appears **after GIVEN and before MOCKING** when capturing is required.
-   - Limit the section to declaring the capture containers. The logic that records values (e.g., configuring mocks or test doubles) belongs in MOCKING or SETUP.
-   - Skip this section when no captured values are needed.
-
-3. **MOCKING**
+2. **MOCKING**
    - Define and configure **mock objects**.
    - Mock variables must be named `mock*`.
    - **Use constructor injection for dependencies**, or use mocking frameworks like Mockito.
@@ -148,50 +141,49 @@ The following sections are defined for a well structured test.
    - **The MOCKING section must not be merged with any other section.**
    - **If mocking logic itself has multiple responsibilities (e.g. creating fakes and configuring behaviors), split into sub-headers** (e.g. `// MOCKING: Create mock objects` and `// MOCKING: Configure mock responses`).
 
-4. **SETUP**
+3. **SETUP**
    - Perform all test initialization that prepares the non-mocked environment (e.g., creating HttpServletRequest, configuring dependency injection, and setting up request parameters).
    - Variables created in this section should be prefixed with `env*` (e.g. `envHttpRequest`, `envServiceRegistry`).
    - When constants or variables are needed in this section that are important for the overall comprehensibility of the test, they should be declared in variables in the GIVEN section instead.
-   - The SETUP section should follow the preceding arrangement sections (GIVEN → CAPTURE → MOCKING). If those sections are omitted, SETUP becomes the first applicable section.
+   - The SETUP section should follow the GIVEN section, unless there is nothing to setup in SETUP, in which case it should be omitted.
    - The SETUP section should refer to GIVEN variables, not `mock*` variables, except in rare occasions.
    - Assign mock objects to concrete interface variables in the SETUP section, using the `env*` prefix (e.g., `envLogger = mockLogger`). The mock variables themselves may only be used in the SETUP and BEHAVIOR sections.
    - **The SETUP section must not be merged with any other section.**
    - **If SETUP involves multiple distinct stages (e.g. reading fixtures, wiring dependencies, configuring environment), split into multiple sub-sections with descriptive comments.**
 
-5. **SYSTEM UNDER TEST**
+4. **SYSTEM UNDER TEST**
    - Assigns the system under test to a variable named `sut`.
    - If multiple systems are being tested for some reason, assign them to separate `sut*` variables.
    - The SYSTEM UNDER TEST must never directly reference `mock*` variables. It must use the `env*` variables initialized in SETUP.
    - **The SYSTEM UNDER TEST section must not be merged with any other section.**
 
-6. **WHEN**
+5. **WHEN**
    - Perform the action or method call being tested.
    - Assign the results to `actual*` variables. This would typically be the return value received from invoking the system under test.
      - If the test requires asserting against other results in the THEN section or BEHAVIOR section, then use the opportunity to assign those results to their own `actual*` variables, e.g. after invoking the system under test.
    - If the test needs to use an `env*` in later sections, then assign them to `actual*` variables in WHEN and use those instead.
-   - When values have been captured into `capture*` placeholders, assign them to `actual*` variables here (e.g., `String actualPayload = capturePayload.get();`) before performing assertions.
    - **The WHEN section must not be merged with any other section.**
 
-7. **EXPECTATIONS**
+6. **EXPECTATIONS**
    - Define expected values **before assertions**.
    - Expected values must be assigned to `expected*` variables.
    - The EXPECTATIONS section should be strictly placed after WHEN and before THEN.
    - This section should not refer to any `actual*` variables.
    - **The EXPECTATIONS section must not be merged with any other section.**
 
-8. **THEN**
+7. **THEN**
    - Perform **assertions** comparing actual results to expected values.
    - **Never assert against literals**—always use `expected*` variables.
    - **The THEN section must not be merged with any other section.**
 
-9. **LOGGING**
+8. **LOGGING**
    - Verify any behavior that can be validated via captured logging operations.
    - Capture the behavior of the code under test at appropriate levels (including trace-level logging with extensive details).
    - In unit tests, assert against log entries in the LOGGING section to confirm that the intended execution branch was exercised.
    - **Prefer asserting on emitted logs over (or in addition to) mock verifications** whenever possible: log-based assertions are simpler to write and review, and often replace complex mock setups (e.g., capturing parameters).
    - Each unit test should explicitly verify that the execution branch it is meant to cover is taken, reducing false positives when setup does not exercise the desired branch.
 
-10. **BEHAVIOR**
+9. **BEHAVIOR**
    - Contains assertions for **mock interactions** (e.g., `Mockito.verify(mockService).doSomething();`).
    - This section **must be present if mocks are used**.
    - **The BEHAVIOR section must not be merged with any other section.**

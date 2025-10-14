@@ -103,50 +103,42 @@ order, omitting any that are not needed. Section headers must be full-sentence c
 `// GIVEN: A valid email and password`).
 
 1. **GIVEN**
-    - Declare inputs, configuration primitives, and fixture instances.
-    - Prefix variables with `given` (e.g., `const givenEmail = 'user@example.com';`).
-    - Do not perform side effects here—limit this section to pure data.
+   - Declare inputs, configuration primitives, and fixture instances.
+   - Prefix variables with `given` (e.g., `const givenEmail = 'user@example.com';`).
+   - Do not perform side effects here—limit this section to pure data.
 
-2. **CAPTURE**
-    - Declare placeholders for values collaborators will capture (e.g., arguments forwarded to a mock).
-    - Name them with the `capture` prefix (`let captureAuditEvent: AuditEvent | undefined;`).
-    - Restrict this section to variable declarations; configure mocks or fakes to populate them elsewhere.
-    - Omit CAPTURE entirely when no captured state is required.
+2. **MOCKING**
+   - Create and configure mocks or spies (e.g., `jest.fn()`, `vi.fn()`).
+   - Prefix variables with `mock` and keep configuration grouped by responsibility. Large mock setups should be split with
+     sub-headers such as `// MOCKING: Configure authentication client failure response`.
+   - Only include this section when mocking is required.
 
-3. **MOCKING**
-    - Create and configure mocks or spies (e.g., `jest.fn()`, `vi.fn()`).
-    - Prefix variables with `mock` and keep configuration grouped by responsibility. Large mock setups should be split with
-      sub-headers such as `// MOCKING: Configure authentication client failure response`.
-    - Only include this section when mocking is required.
+3. **SETUP**
+   - Prepare the execution environment (dependency containers, HTTP contexts, configuration objects, etc.).
+   - Prefix variables with `env` (e.g., `const envLogger = createLogger(mockTransport);`).
+   - Assign mocks to the concrete interfaces the SUT expects in this section (e.g., `const envAuthClient = mockAuthClient;`).
 
-4. **SETUP**
-    - Prepare the execution environment (dependency containers, HTTP contexts, configuration objects, etc.).
-    - Prefix variables with `env` (e.g., `const envLogger = createLogger(mockTransport);`).
-    - Assign mocks to the concrete interfaces the SUT expects in this section (e.g., `const envAuthClient = mockAuthClient;`).
-    - Ensure SETUP appears after whichever of GIVEN, CAPTURE, and MOCKING are present; skip unused sections without reordering them.
-
-5. **SYSTEM UNDER TEST**
+4. **SYSTEM UNDER TEST**
    - Instantiate the SUT and assign it to `sut` (or `sutFoo` if multiple instances are unavoidable).
    - The SUT should consume `env` dependencies, not raw `mock` objects.
 
-6. **WHEN**
-    - Execute the action under test and capture outputs in `actual`-prefixed variables.
-    - For asynchronous operations, `await` the promise in this section before moving on.
-    - When collaborators captured values into `capture*` placeholders, move them into `actual*` variables here so THEN focuses on verification rather than plumbing.
+5. **WHEN**
+   - Execute the action under test and capture outputs in `actual`-prefixed variables.
+   - For asynchronous operations, `await` the promise in this section before moving on.
 
-7. **EXPECTATIONS**
+6. **EXPECTATIONS**
    - Define expected outcomes (`expected`-prefixed variables) before asserting.
    - Do not refer to `actual` variables while computing expectations.
 
-8. **THEN**
+7. **THEN**
    - Assert that actual values match expectations. Never assert directly against literals—compare `actual` and `expected` variables.
    - Prefer built-in Jest matchers with helpful diffs over custom logic.
 
-9. **LOGGING** (optional)
+8. **LOGGING** (optional)
    - Assert against captured log output when logging distinguishes execution paths.
    - Prefer log assertions to mock verifications when feasible—they are usually simpler to maintain.
 
-10. **BEHAVIOR**
+9. **BEHAVIOR**
    - Verify interactions with mocks (`toHaveBeenCalled`, `toHaveBeenCalledWith`, etc.).
    - This section is mandatory whenever mocks are configured.
 
@@ -162,7 +154,6 @@ Use consistent prefixes to signal intent and stop reviewers from guessing where 
 |--------------------|------------|-----------------------------------------|
 | Inputs / fixtures  | `given`    | `const givenPassword = 'secret';`       |
 | Environment setup  | `env`      | `const envRequest = createRequest();`   |
-| Captured values    | `capture`  | `let captureAuditEvent: AuditEvent;`    |
 | Mocks / spies       | `mock`     | `const mockAuthClient = jest.fn();`     |
 | System under test  | `sut`      | `const sut = new AuthService(envDeps);` |
 | Observed results   | `actual`   | `const actualToken = await sut.login();`|

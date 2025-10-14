@@ -119,53 +119,42 @@ Each test function must use **full-sentence comment headers** to delineate secti
    - Allocate reusable fixtures here. Fixture helper classes should be named `Fixture*` and stored in `given_*` variables.
    - Never merge GIVEN with other sections.
 
-2. **CAPTURE**
-   - Declare placeholders for collaborator output that needs to be inspected later (e.g., arguments captured by mocks or values recorded by fakes).
-   - Prefix these placeholders with `capture_` for consistency (`std::optional<Event> capture_event;`).
-   - Restrict this section to declarations so the logic that populates them lives in MOCKING or SETUP.
-   - Omit CAPTURE entirely when no captured information is required.
-
-3. **MOCKING**
+2. **MOCKING**
    - Create and configure mocks or fakes; prefix variables with `mock_` or `fake_`.
    - Prefer constructor injection. When using GoogleMock, configure expectations (`EXPECT_CALL`) in this section only if they represent default behavior; verification still happens later.
    - Do not merge with other sections. If mocking has multiple stages, add sub-headers such as `// MOCKING: Configure database stub`.
 
-4. **SETUP**
+3. **SETUP**
    - Prepare non-mocked environment objects (e.g., dependency containers, request contexts) using the `env_` prefix.
    - Assign mocks/fakes to production-facing pointers or references here (e.g., `std::shared_ptr<ILogger> env_logger = mock_logger;`).
    - Keep literals that matter for readability in the GIVEN section rather than repeating them in SETUP.
-   - Ensure SETUP follows whichever of GIVEN, CAPTURE, and MOCKING apply; skip unused sections without reordering.
    - Never merge SETUP with other sections.
 
-5. **SYSTEM UNDER TEST**
+4. **SYSTEM UNDER TEST**
    - Instantiate the SUT and assign it to a variable named `sut` (or `sut_<suffix>` when multiple SUTs exist).
    - Construct the SUT **only** with `env_` variables—never pass mocks directly.
    - Do not merge with other sections.
 
-6. **WHEN**
+5. **WHEN**
    - Invoke the behavior under test and capture results in `actual_` variables.
    - If additional state will be asserted later, copy it into dedicated `actual_` variables here.
-   - When collaborators populate `capture_*` placeholders, move their values into `actual_*` variables before asserting on them.
    - Never merge with other sections.
 
-7. **EXPECTATIONS**
+6. **EXPECTATIONS**
    - Define expected outcomes in `expected_` variables.
    - Place this section strictly between WHEN and THEN, and do not reference `actual_` values.
    - Never merge with other sections.
 
-
-8. **THEN**
+7. **THEN**
    - Assert that actual values match expectations. Avoid asserting against raw literals; always reference `expected_` variables.
    - Supply custom failure messages explaining the discrepancy.
    - Do not merge with other sections.
 
-
-9. **LOGGING** (optional)
+8. **LOGGING** (optional)
    - Verify logged output when relevant, using captured sinks or fakes.
    - Prefer log-based assertions to complex mock verifications when possible.
 
-
-10. **BEHAVIOR**
+9. **BEHAVIOR**
    - Verify mock interactions (`EXPECT_CALL(...).Times(...)`, `mock.VerifyAndClearExpectations()` etc.).
    - Required whenever mocks are used.
    - Do not merge with other sections.

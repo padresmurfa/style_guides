@@ -133,12 +133,6 @@ Each test method follows a structured format, **separated by clear comments**:
    - The GIVEN section should always be the first section in a test, unless there is nothing to define in GIVEN, in which case it should be omitted.
    - **The GIVEN section must not be merged with any other section**.
 
-1. **CAPTURE**
-   - Declare placeholders for values captured from collaborators, such as spy callbacks or reference parameters.
-   - Prefix these placeholders with `$capture` (e.g., `$capturePublishedEvent`).
-   - Keep this section limited to declarations; configure mocks or fakes to populate them in the MOCKING section.
-   - Omit CAPTURE entirely when no captured data is necessary.
-
 1. **MOCKING**
    - Define and configure **mock objects or test doubles**.
    - Mock variables must be named `$mock*`.
@@ -151,7 +145,7 @@ Each test method follows a structured format, **separated by clear comments**:
    - Perform all test initialization that prepares the non-mocked environment (e.g., creating HTTP contexts, configuring dependency containers, and setting up request parameters).
    - Variables created in this section should be prefixed with `$env` (e.g. `$envHttpContext`, `$envActionContext`).
    - When constants or variables are needed in this section that are important for the overall comprehensibility of the test, they should be declared in variables in the GIVEN section instead.
-   - The SETUP section should follow the preceding arrangement sections (GIVEN → CAPTURE → MOCKING). If those sections are omitted, SETUP becomes the first applicable section.
+   - The SETUP section should follow the GIVEN section, unless there is nothing to setup in SETUP, in which case it should be omitted.
    - The SETUP section should refer to `$given*` variables, not `$mock*` variables, except in rare occasions.
    - Assign mock objects to real interface variables in the SETUP section, using the `$env*` prefix (e.g., `$envLogger = $mockLogger->reveal();`). The mock variables themselves may only be used in the SETUP and BEHAVIOR sections.
    - **The SETUP section must not be merged with any other section**.
@@ -168,7 +162,6 @@ Each test method follows a structured format, **separated by clear comments**:
    - Assign the results to `$actual*` variables. This would typically be the return value received from invoking the system under test.
      - If the test requires asserting against other results in the THEN section or BEHAVIOR section, then use the opportunity to assign those results to their own `$actual*` variables, e.g. after invoking the system under test.
    - If the test needs to use an `$env*` in later sections, then assign them to `$actual*` variables in WHEN and use those instead.
-   - Move any data stored in `$capture*` placeholders into `$actual*` variables here before asserting on it.
    - **The WHEN section must not be merged with any other section**.
 
 1. **EXPECTATIONS**

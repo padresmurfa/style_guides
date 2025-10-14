@@ -85,41 +85,33 @@ Consistent sections make tests scannable. Separate logical phases with `//` comm
    - Prefix variables with `given` (e.g., `val givenInvoices = listOf(...)`).
    - Instantiate reusable fixtures here.
 
-2. **CAPTURE**
-   - Declare placeholders for collaborator output that will be asserted later.
-   - Prefix them with `capture` (e.g., `val capturePublishedEvents = mutableListOf<Event>()`).
-   - Limit this section to defining the containers; configure mocks or fakes to populate them in the MOCKING section.
-   - Skip the section when no captured state is necessary.
-
-3. **MOCKING**
+2. **MOCKING**
    - Configure mocks using libraries like MockK.
    - Name mock variables with the `mock` prefix (`val mockRepository = mockk<InvoiceRepository>()`).
 
-4. **SETUP**
+3. **SETUP**
    - Wire mocks into concrete collaborators and prepare environment objects.
    - Use the `env` prefix (`val envRepository: InvoiceRepository = mockRepository`).
-   - Ensure SETUP follows whichever of GIVEN, CAPTURE, and MOCKING are needed; omit unused sections without shuffling the order.
 
-5. **SYSTEM UNDER TEST**
+4. **SYSTEM UNDER TEST**
    - Assign the object or function under test to `sut` (or `sut*` for multiples).
    - Never pass mocks directly—pass `env*` variables to the constructor or function.
 
-6. **WHEN**
+5. **WHEN**
    - Execute the behavior under test.
    - Assign outcomes to `actual*` variables.
-   - Move any values recorded in `capture*` placeholders into `actual*` variables before asserting.
 
-7. **EXPECTATIONS**
+6. **EXPECTATIONS**
    - Declare expected values in `expected*` variables before assertions.
 
-8. **THEN**
+7. **THEN**
    - Assert results using assertion libraries (JUnit, Truth, Kotest).
    - Never compare against literals directly; use `expected*` values.
 
-9. **LOGGING** *(optional)*
+8. **LOGGING** *(optional)*
    - Validate structured logging or metric emission captured via fakes.
 
-10. **BEHAVIOR** *(required when mocks are used)*
+9. **BEHAVIOR** *(required when mocks are used)*
    - Verify interactions (e.g., `verify { mockRepository.save(expectedInvoice) }`).
 
 Use descriptive sub-headers when sections grow large (e.g., `// SETUP: configure dispatcher`).

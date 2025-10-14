@@ -109,60 +109,52 @@ Each test function follows a structured format, **separated by clear, descriptiv
 ### **Standard Sections:**
 
 1. **GIVEN**
-    - Set up initial conditions and inputs.
-    - Variables declared here use the `given_` prefix.
-    - Instantiate fixtures or helper factories in this section; fixture classes should be named `Fixture*`.
-    - The GIVEN section must not be merged with any other section and should appear first when present.
+   - Set up initial conditions and inputs.
+   - Variables declared here use the `given_` prefix.
+   - Instantiate fixtures or helper factories in this section; fixture classes should be named `Fixture*`.
+   - The GIVEN section must not be merged with any other section and should appear first when present.
 
-2. **CAPTURE**
-    - Declare containers for values captured from collaborators (e.g., through mocks, fakes, or fixtures like `caplog`).
-    - Name these placeholders with the `capture_` prefix to make their purpose obvious.
-    - Limit this section to declarations; configure how values are captured inside MOCKING or SETUP.
-    - Skip this section entirely when no captured data is needed.
+2. **MOCKING**
+   - Define and configure mock objects.
+   - Mock variables must be named `mock_*` (or `fake_*` for handwritten fakes).
+   - Prefer decorator-based patching (`@patch`) or fixture-based mocks over inline context managers.
+   - Keep mocking logic separate from other sections; large mocks may be split into sub-sections.
 
-3. **MOCKING**
-    - Define and configure mock objects.
-    - Mock variables must be named `mock_*` (or `fake_*` for handwritten fakes).
-    - Prefer decorator-based patching (`@patch`) or fixture-based mocks over inline context managers.
-    - Keep mocking logic separate from other sections; large mocks may be split into sub-sections.
+3. **SETUP**
+   - Prepare the environment around the system under test (e.g. wiring dependencies, building contexts, assigning mocks to
+     collaborator slots).
+   - Variables created here use the `env_` prefix and may reference `given_*` and `mock_*` values.
+   - Assign mock objects to their concrete interfaces in this section (e.g. `env_repository = mock_repository`).
+   - The SETUP section must not be merged with other sections.
 
-4. **SETUP**
-    - Prepare the environment around the system under test (e.g. wiring dependencies, building contexts, assigning mocks to
-      collaborator slots).
-    - Variables created here use the `env_` prefix and may reference `given_*` and `mock_*` values.
-    - Assign mock objects to their concrete interfaces in this section (e.g. `env_repository = mock_repository`).
-    - Ensure SETUP follows whichever of GIVEN, CAPTURE, and MOCKING are present; omit unused sections without reordering those that remain.
-    - The SETUP section must not be merged with other sections.
-
-5. **SYSTEM UNDER TEST**
+4. **SYSTEM UNDER TEST**
    - Instantiate or select the system under test and assign it to a variable named `sut` (or `sut_*` when multiple systems are
      required).
    - The SUT should depend on `env_` variables, not raw `mock_*` instances.
    - This section stands alone and is not merged with others.
 
-6. **WHEN**
-    - Execute the action being tested.
-    - Assign return values and side effects to `actual_*` variables.
-    - If later sections need environment values, capture them into `actual_*` variables instead of reusing `env_*` directly.
-    - When collaborators captured values into `capture_*` placeholders, move them into `actual_*` variables in this section before asserting.
-    - Do not merge WHEN with other sections.
+5. **WHEN**
+   - Execute the action being tested.
+   - Assign return values and side effects to `actual_*` variables.
+   - If later sections need environment values, capture them into `actual_*` variables instead of reusing `env_*` directly.
+   - Do not merge WHEN with other sections.
 
-7. **EXPECTATIONS**
+6. **EXPECTATIONS**
    - Declare expected values before performing assertions.
    - Expected values must be assigned to `expected_*` variables and should not reference `actual_*` names.
    - This section always appears between WHEN and THEN and is never merged with other sections.
 
-8. **THEN**
+7. **THEN**
    - Perform assertions comparing `actual_*` results to `expected_*` values.
    - Never assert directly against literals—use an `expected_*` variable, even for simple values.
    - Keep assertions focused on verifying outcomes, not behaviors of mocks.
 
-9. **LOGGING** *(if applicable)*
+8. **LOGGING** *(if applicable)*
    - Verify behavior observable through captured logs (e.g. via `caplog`).
    - Prefer log assertions over mock verifications when they clearly demonstrate the branch exercised.
    - Use helper utilities or fixtures to assert on log structure rather than parsing raw tuples inline.
 
-10. **BEHAVIOR** *(if mocks are used)*
+9. **BEHAVIOR** *(if mocks are used)*
    - Assert interactions with mocks or fakes (e.g. `mock_client.assert_called_once_with(...)`).
    - Every mock configured for verification must be asserted in this section; unused mocks should be removed or converted to
      fixtures.
