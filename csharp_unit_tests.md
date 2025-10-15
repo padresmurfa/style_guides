@@ -133,6 +133,41 @@ The Arrange stage gathers inputs, configures doubles, and exposes collaborators 
 - The GIVEN section should always be the first section in a test, unless there is nothing to define in GIVEN, in which case it should be omitted.
 - **The GIVEN section must not be merged with any other section.**
 
+✅ **Good Example:**
+```csharp
+[Fact]
+public void Test_Parse_Succeeds_WithWellFormedPayload()
+{
+    // GIVEN: a JSON payload with the required fields
+    string givenPayload = "{ \"id\": 1, \"name\": \"Ada\" }";
+
+    // WHEN
+    ParsedResult actualResult = Parser.Parse(givenPayload);
+
+    // EXPECTATIONS
+    string expectedName = "Ada";
+
+    // THEN
+    Assert.Equal(expectedName, actualResult.Name);
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+[Fact]
+public void Test_Parse_Succeeds_WithWellFormedPayload()
+{
+    // WHEN: GIVEN data is inlined and unnamed
+    ParsedResult actualResult = Parser.Parse("{ \"id\": 1, \"name\": \"Ada\" }");
+
+    // EXPECTATIONS
+    string expectedName = "Ada";
+
+    // THEN
+    Assert.Equal(expectedName, actualResult.Name);
+}
+```
+
 #### **5.1.2 CAPTURE**
 - Declare variables that will hold values captured from mocks, spies, or test fakes.
 - Prefix these placeholders with `capture` (e.g. `capturePublishedMessage`).
@@ -140,6 +175,66 @@ The Arrange stage gathers inputs, configures doubles, and exposes collaborators 
 - Position CAPTURE immediately after GIVEN and before MOCKING whenever it is present.
 - Promote capture placeholders into `actual*` variables during WHEN so assertions always reference concrete results.
 - Include CAPTURE only when collaborators expose information that must be asserted later.
+
+✅ **Good Example:**
+```csharp
+[Fact]
+public async Task Test_SendEmail_CapturesRecipient()
+{
+    // GIVEN: an order that should trigger a confirmation email
+    Order givenOrder = Fixtures.Order();
+
+    // CAPTURE: observe the recipient address used by the mailer
+    string? captureRecipient = null;
+
+    // MOCKING
+    Mock<IEmailGateway> mockGateway = new(MockBehavior.Strict);
+    mockGateway
+        .Setup(gateway => gateway.SendAsync(It.IsAny<EmailMessage>()))
+        .Callback<EmailMessage>(message => captureRecipient = message.Recipient)
+        .Returns(Task.CompletedTask)
+        .Verifiable();
+
+    // SETUP
+    IEmailGateway envGateway = mockGateway.Object;
+
+    // SYSTEM UNDER TEST
+    ConfirmationService sut = new(envGateway);
+
+    // WHEN
+    await sut.SendOrderConfirmationAsync(givenOrder);
+    string? actualRecipient = captureRecipient;
+
+    // EXPECTATIONS
+    string expectedRecipient = givenOrder.Customer.Email;
+
+    // THEN
+    Assert.Equal(expectedRecipient, actualRecipient);
+
+    // BEHAVIOR
+    mockGateway.Verify();
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+[Fact]
+public async Task Test_SendEmail_CapturesRecipient()
+{
+    // CAPTURE is skipped and the callback writes directly to an actual* variable
+    string? actualRecipient = null;
+
+    Mock<IEmailGateway> mockGateway = new();
+    mockGateway
+        .Setup(gateway => gateway.SendAsync(It.IsAny<EmailMessage>()))
+        .Callback<EmailMessage>(message => actualRecipient = message.Recipient);
+
+    ConfirmationService sut = new(mockGateway.Object);
+    await sut.SendOrderConfirmationAsync(Fixtures.Order());
+
+    Assert.NotNull(actualRecipient); // ❌ No explicit CAPTURE placeholder and no EXPECTATIONS section
+}
+```
 
 #### **5.1.3 MOCKING**
 - Define and configure **mock objects**.
@@ -158,6 +253,48 @@ Disciplined mocking keeps tests readable and trustworthy by ensuring only true c
 - **Assertions on mock interactions belong in the BEHAVIOR section, not in THEN.**
 - **Mocks must never be passed directly to the system under test.** Assign mocks to interface-conforming `env*` variables in SETUP and pass those to the SUT.
 - This pattern keeps SUT construction readable: MOCKING owns the intricate setup, SETUP exposes ready-to-use interfaces via `env*`, and SYSTEM UNDER TEST reads like a clean recipe. Skipping the indirection devolves constructor calls into walls of `.Object` accessors that reviewers must mentally untangle.
+
+✅ **Good Example:**
+```csharp
+[Fact]
+public void Test_Processor_InvokesRepository()
+{
+    // GIVEN
+    Guid givenId = Guid.NewGuid();
+
+    // MOCKING: configure a strict repository mock
+    Mock<IWidgetRepository> mockRepository = new(MockBehavior.Strict);
+    mockRepository.Setup(repo => repo.Load(givenId)).Returns(new Widget()).Verifiable();
+
+    // SETUP
+    IWidgetRepository envRepository = mockRepository.Object;
+
+    // SYSTEM UNDER TEST
+    WidgetProcessor sut = new(envRepository);
+
+    // WHEN
+    sut.Process(givenId);
+
+    // BEHAVIOR
+    mockRepository.Verify();
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+[Fact]
+public void Test_Processor_InvokesRepository()
+{
+    // MOCKING: loose mock with unclear naming
+    var repository = new Mock<IWidgetRepository>(); // ❌ Variable not prefixed with mock*
+    repository.Setup(r => r.Load(It.IsAny<Guid>())); // ❌ Setup is never verified
+
+    // SYSTEM UNDER TEST: mock passed directly without env* indirection
+    WidgetProcessor sut = new(repository.Object); // ❌ Violates SETUP/SUT separation
+
+    sut.Process(Guid.NewGuid());
+}
+```
 
 ###### **Test Fakes (a.k.a. Dummies)**
 Test fakes are lightweight, purpose-built implementations of an interface that you author specifically for the test suite. They shine when mocking frameworks become gnarly—especially for complex interaction verification or structured log inspection—because you can write intention-revealing code without wrestling with callback signatures or argument matchers.
@@ -406,11 +543,102 @@ public void Test_ServiceCallsDependency()
 - **The SETUP section must not be merged with any other section.**
 - If SETUP involves multiple distinct stages (e.g. reading fixtures, wiring dependencies, configuring environment), split it into multiple sub-sections with descriptive comments.
 
+✅ **Good Example:**
+```csharp
+[Fact]
+public void Test_Controller_UsesConfiguredContext()
+{
+    // GIVEN
+    DefaultHttpContext givenHttpContext = new();
+
+    // MOCKING
+    Mock<IUserRepository> mockRepository = new(MockBehavior.Strict);
+    mockRepository.Setup(repo => repo.GetCurrent()).Returns(Fixtures.User()).Verifiable();
+
+    // SETUP: promote mocks and fixtures into env* dependencies
+    IUserRepository envRepository = mockRepository.Object;
+    HttpContext envHttpContext = givenHttpContext;
+
+    // SYSTEM UNDER TEST
+    UserController sut = new(envRepository)
+    {
+        ControllerContext = new ControllerContext { HttpContext = envHttpContext }
+    };
+
+    // WHEN
+    IActionResult actualResult = sut.GetCurrentUser();
+
+    // EXPECTATIONS
+    Type expectedResultType = typeof(OkObjectResult);
+
+    // THEN
+    Assert.IsType(expectedResultType, actualResult);
+
+    // BEHAVIOR
+    mockRepository.Verify();
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+[Fact]
+public void Test_Controller_UsesConfiguredContext()
+{
+    // SETUP section is skipped entirely
+    Mock<IUserRepository> mockRepository = new();
+
+    // SYSTEM UNDER TEST: mocks and fixtures are passed inline
+    UserController sut = new(mockRepository.Object)
+    {
+        ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+    };
+
+    sut.GetCurrentUser();
+    mockRepository.Verify(repo => repo.GetCurrent()); // ❌ No env* variables and no structured sections
+}
+```
+
 #### **5.1.5 SYSTEM UNDER TEST**
 - Assign the system under test to a variable named `sut`.
 - If multiple systems are being tested, assign them to separate `sut*` variables.
 - SYSTEM UNDER TEST must never directly reference `mock*` variables; use the `env*` variables initialised in SETUP.
 - **The SYSTEM UNDER TEST section must not be merged with any other section.**
+
+✅ **Good Example:**
+```csharp
+[Fact]
+public void Test_Handler_ConstructsWithDependencies()
+{
+    // MOCKING
+    Mock<IClock> mockClock = new(MockBehavior.Strict);
+
+    // SETUP
+    IClock envClock = mockClock.Object;
+
+    // SYSTEM UNDER TEST
+    ExpirationHandler sut = new(envClock);
+
+    // WHEN
+    sut.Handle();
+
+    // BEHAVIOR
+    mockClock.Verify(clock => clock.UtcNow, Times.AtLeastOnce);
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+[Fact]
+public void Test_Handler_ConstructsWithDependencies()
+{
+    Mock<IClock> mockClock = new();
+
+    // SYSTEM UNDER TEST: mock used directly and variable not named sut
+    var handler = new ExpirationHandler(mockClock.Object); // ❌ Missing envClock indirection and sut naming
+
+    handler.Handle();
+}
+```
 
 #### **5.1.6 Fixtures: Best Practices**
 Reusable fixtures encourage realistic, DRY data that mirrors production scenarios while keeping tests focused on behaviour instead of data plumbing. Inlining bespoke objects everywhere invites duplication, increases maintenance costs when models evolve, and makes it harder to reason about how changes cascade across tests.
@@ -511,6 +739,40 @@ The Act stage performs the single behaviour under test. Keep it focused on invok
 - **The WHEN section must not be merged with any other section.**
 - When using helpers such as `Assert.Throws`, treat the wrapper as part of WHEN. Store the resulting exception in an `actual*` variable and assert on it in THEN.
 
+✅ **Good Example:**
+```csharp
+[Fact]
+public void Test_ScoreCalculator_ReturnsExpectedScore()
+{
+    // GIVEN
+    Player givenPlayer = Fixtures.Player();
+
+    // SYSTEM UNDER TEST
+    ScoreCalculator sut = new();
+
+    // WHEN
+    int actualScore = sut.Calculate(givenPlayer);
+
+    // EXPECTATIONS
+    int expectedScore = 9001;
+
+    // THEN
+    Assert.Equal(expectedScore, actualScore);
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+[Fact]
+public void Test_ScoreCalculator_ReturnsExpectedScore()
+{
+    ScoreCalculator sut = new();
+
+    // WHEN and THEN are merged; result is asserted inline
+    Assert.Equal(9001, sut.Calculate(Fixtures.Player())); // ❌ Missing actual* variable and EXPECTATIONS section
+}
+```
+
 ### **5.3 Assert**
 The Assert stage records expectations up front and verifies them explicitly. Separating the declaration of expectations from the assertions themselves keeps the intent clear and prevents verification from being scattered throughout the test.
 
@@ -521,15 +783,126 @@ The Assert stage records expectations up front and verifies them explicitly. Sep
 - This section should not refer to any `actual*` variables.
 - **The EXPECTATIONS section must not be merged with any other section.**
 
+✅ **Good Example:**
+```csharp
+[Fact]
+public void Test_Calculator_AddsNumbers()
+{
+    // GIVEN
+    int givenLeft = 2;
+    int givenRight = 3;
+
+    // SYSTEM UNDER TEST
+    Calculator sut = new();
+
+    // WHEN
+    int actualSum = sut.Add(givenLeft, givenRight);
+
+    // EXPECTATIONS
+    int expectedSum = givenLeft + givenRight;
+
+    // THEN
+    Assert.Equal(expectedSum, actualSum);
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+[Fact]
+public void Test_Calculator_AddsNumbers()
+{
+    Calculator sut = new();
+    int actualSum = sut.Add(2, 3);
+
+    // EXPECTATIONS section is skipped and literals are asserted inline
+    Assert.Equal(5, actualSum); // ❌ Violates EXPECTATIONS rule
+}
+```
+
 #### **5.3.2 THEN**
 - Perform **assertions** comparing actual results to expected values.
 - **Never assert against literals**—always use `expected*` variables.
 - **The THEN section must not be merged with any other section.**
 
+✅ **Good Example:**
+```csharp
+[Fact]
+public void Test_OrderProcessor_ReturnsCompletedStatus()
+{
+    // GIVEN
+    Order givenOrder = Fixtures.Order();
+
+    // SYSTEM UNDER TEST
+    OrderProcessor sut = new();
+
+    // WHEN
+    OrderResult actualResult = sut.Process(givenOrder);
+
+    // EXPECTATIONS
+    OrderStatus expectedStatus = OrderStatus.Completed;
+
+    // THEN
+    Assert.Equal(expectedStatus, actualResult.Status);
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+[Fact]
+public void Test_OrderProcessor_ReturnsCompletedStatus()
+{
+    OrderProcessor sut = new();
+    OrderResult actualResult = sut.Process(Fixtures.Order());
+
+    // THEN: literal assertion with no EXPECTATIONS section
+    Assert.Equal(OrderStatus.Completed, actualResult.Status); // ❌ Expected value should be stored in expectedStatus
+}
+```
+
 #### **5.3.3 LOGGING**
 - Verify any behaviour that can be validated via captured logging operations.
 - Prefer asserting on emitted logs over (or in addition to) mock verifications; log-based assertions are simpler to write and review and often replace complex mock setups.
 - Each unit test should explicitly verify that the execution branch it is meant to cover is taken, reducing false positives when setup does not exercise the desired branch.
+
+✅ **Good Example:**
+```csharp
+[Fact]
+public void Test_Handler_EmitsInformationLog()
+{
+    // GIVEN
+    Request givenRequest = Fixtures.Request();
+
+    // MOCKING
+    FakeLogger fakeLogger = new();
+
+    // SETUP
+    ILogger envLogger = fakeLogger;
+
+    // SYSTEM UNDER TEST
+    RequestHandler sut = new(envLogger);
+
+    // WHEN
+    sut.Handle(givenRequest);
+
+    // LOGGING
+    fakeLogger.AssertLogged(LogLevel.Information, "Handled request");
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+[Fact]
+public void Test_Handler_EmitsInformationLog()
+{
+    FakeLogger fakeLogger = new();
+    RequestHandler sut = new(fakeLogger);
+
+    sut.Handle(Fixtures.Request());
+
+    // LOGGING assertions are skipped entirely
+    // ❌ Test passes even if no log was written
+}
+```
 
 #### **5.3.4 BEHAVIOR**
 - Contains assertions for **mock interactions** (e.g., `mockService.Verify(x => x.DoSomething(), Times.Once());`).
@@ -631,6 +1004,17 @@ public void Test_DivideByZero_ThrowsException()
     // THEN
     Assert.Equal(expectedExceptionType, actualException.GetType());
 }
+```
+
+🚫 **Bad Example:**
+```csharp
+[Test]
+public void Test_DivideByZero_ThrowsException()
+{
+    // WHEN: exception is not captured and assertions are embedded in the delegate
+    Assert.Throws<DivideByZeroException>(() => Assert.Equal(0, Math.Divide(10, 0))); // ❌ No WHEN/THEN separation and no actual* variable
+}
+```
 
 ---
 
@@ -694,6 +1078,95 @@ Copy-paste programming is often the most readable choice for test setup. Start w
 - When a shared helper truly improves clarity, keep it near the tests that use it and document which scenarios rely on it so future contributors know when to extend or bypass it.
 - When you do copy setup code, call out the variations in the section-header comments (e.g. `// GIVEN: user has insufficient balance`). These comments act as signposts so reviewers can immediately see why one test diverges from another despite similar bodies.
 
+✅ **Good Example:**
+```csharp
+[Fact]
+public async Task Test_ProcessPayment_ReturnsDeclined_WhenBalanceIsLow()
+{
+    // GIVEN: customer balance is below the threshold
+    Customer givenCustomer = Fixtures.CustomerWithBalance(2.00m);
+    PaymentRequest givenRequest = Fixtures.PaymentRequest(amount: 5.00m);
+
+    // MOCKING
+    Mock<IBankGateway> mockGateway = Fixtures.StrictGateway();
+    mockGateway.Setup(gateway => gateway.ChargeAsync(givenRequest)).ReturnsAsync(PaymentStatus.Declined).Verifiable();
+
+    // SETUP
+    IBankGateway envGateway = mockGateway.Object;
+
+    // SYSTEM UNDER TEST
+    PaymentProcessor sut = new(envGateway);
+
+    // WHEN
+    PaymentResult actualResult = await sut.ProcessAsync(givenCustomer, givenRequest);
+
+    // EXPECTATIONS
+    PaymentStatus expectedStatus = PaymentStatus.Declined;
+
+    // THEN
+    Assert.Equal(expectedStatus, actualResult.Status);
+
+    // BEHAVIOR
+    mockGateway.Verify();
+}
+
+[Fact]
+public async Task Test_ProcessPayment_ReturnsApproved_WhenBalanceIsSufficient()
+{
+    // GIVEN: customer balance comfortably covers the request
+    Customer givenCustomer = Fixtures.CustomerWithBalance(25.00m);
+    PaymentRequest givenRequest = Fixtures.PaymentRequest(amount: 5.00m);
+
+    // MOCKING
+    Mock<IBankGateway> mockGateway = Fixtures.StrictGateway();
+    mockGateway.Setup(gateway => gateway.ChargeAsync(givenRequest)).ReturnsAsync(PaymentStatus.Approved).Verifiable();
+
+    // SETUP
+    IBankGateway envGateway = mockGateway.Object;
+
+    // SYSTEM UNDER TEST
+    PaymentProcessor sut = new(envGateway);
+
+    // WHEN
+    PaymentResult actualResult = await sut.ProcessAsync(givenCustomer, givenRequest);
+
+    // EXPECTATIONS
+    PaymentStatus expectedStatus = PaymentStatus.Approved;
+
+    // THEN
+    Assert.Equal(expectedStatus, actualResult.Status);
+
+    // BEHAVIOR
+    mockGateway.Verify();
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+private async Task AssertPaymentAsync(decimal balance, PaymentStatus expectedStatus)
+{
+    // ❌ Helper hides GIVEN/MOCKING differences and forces readers to decipher parameters
+    Customer customer = Fixtures.CustomerWithBalance(balance);
+    PaymentRequest request = Fixtures.PaymentRequest(amount: 5.00m);
+
+    Mock<IBankGateway> mockGateway = new();
+    mockGateway.Setup(gateway => gateway.ChargeAsync(request)).ReturnsAsync(expectedStatus);
+
+    PaymentProcessor sut = new(mockGateway.Object);
+
+    PaymentResult result = await sut.ProcessAsync(customer, request);
+    Assert.Equal(expectedStatus, result.Status);
+}
+
+[Fact]
+public Task Test_ProcessPayment_ReturnsDeclined_WhenBalanceIsLow()
+    => AssertPaymentAsync(2.00m, PaymentStatus.Declined);
+
+[Fact]
+public Task Test_ProcessPayment_ReturnsApproved_WhenBalanceIsSufficient()
+    => AssertPaymentAsync(25.00m, PaymentStatus.Approved);
+```
+
 ---
 
 ## **13. Deterministic Tests and Dependency Injection**
@@ -749,6 +1222,21 @@ public void Test_CreateInvoice_UsesProvidedClock()
 }
 ```
 
+🚫 **Bad Example:**
+```csharp
+[Fact]
+public void Test_CreateInvoice_UsesSystemClock()
+{
+    // GIVEN and WHEN are intertwined by calling DateTime.UtcNow directly
+    InvoiceService sut = new(new RealClock());
+
+    Invoice actualInvoice = sut.CreateInvoice(new Order(Guid.Empty));
+
+    // THEN: the assertion depends on DateTime.UtcNow, introducing flakiness
+    Assert.True(actualInvoice.GeneratedAt <= DateTimeOffset.UtcNow); // ❌ Relies on real time and cannot be deterministic
+}
+```
+
 ---
 
 ## **14. Using comments in tests**
@@ -757,6 +1245,49 @@ Documenting test intent with XML comments provides high-level context that compl
 - **Each test method should be commented with a human-readable explanation of what the test is exercising**
 - **Each test class should be commented with a human-readable explanation of what the test class is exercising**
 - **Use the XML comment syntax to comment test classes and test methods**
+
+✅ **Good Example:**
+```csharp
+/// <summary>
+/// Verifies that the renewal service extends memberships by the configured duration.
+/// </summary>
+public sealed class MembershipRenewalServiceTests
+{
+    /// <summary>
+    /// Ensures that renewing an active membership extends its expiration date by one year.
+    /// </summary>
+    [Fact]
+    public void Test_Renew_ExtendsExpirationByOneYear()
+    {
+        // GIVEN
+        Membership givenMembership = Fixtures.ActiveMembership();
+
+        // SYSTEM UNDER TEST
+        MembershipRenewalService sut = new();
+
+        // WHEN
+        Membership actualResult = sut.Renew(givenMembership);
+
+        // EXPECTATIONS
+        DateTime expectedExpiration = givenMembership.ExpirationDate.AddYears(1);
+
+        // THEN
+        Assert.Equal(expectedExpiration, actualResult.ExpirationDate);
+    }
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+public sealed class MembershipRenewalServiceTests
+{
+    [Fact]
+    public void Test_Renew_ExtendsExpirationByOneYear()
+    {
+        // ❌ Missing XML comments, forcing readers to infer purpose
+    }
+}
+```
 
 ## **15. Increasing test clarity with section comments**
 Narrated section headers transform dense setup or verification code into self-explanatory stories that highlight intent and edge cases. Skipping these comments forces reviewers to reverse-engineer the reason behind each block, slowing code reviews and making it easier for subtle regressions to slip through.
@@ -844,6 +1375,43 @@ To re-iterate:
 - The **SYSTEM UNDER TEST** section must construct the **SUT** using only `env*` variables.
 - Mocks must never be used directly in the **SYSTEM UNDER TEST** section.
 
+✅ **Good Example:**
+```csharp
+[Fact]
+public void Test_ReportService_UsesEnvDependencies()
+{
+    // MOCKING
+    Mock<IReportRepository> mockRepository = new(MockBehavior.Strict);
+    mockRepository.Setup(repo => repo.Load()).Returns(new Report()).Verifiable();
+
+    // SETUP
+    IReportRepository envRepository = mockRepository.Object;
+
+    // SYSTEM UNDER TEST
+    ReportService sut = new(envRepository);
+
+    // WHEN
+    sut.Generate();
+
+    // BEHAVIOR
+    mockRepository.Verify();
+}
+```
+
+🚫 **Bad Example:**
+```csharp
+[Fact]
+public void Test_ReportService_UsesEnvDependencies()
+{
+    Mock<IReportRepository> mockRepository = new();
+
+    // SYSTEM UNDER TEST: dependency injected via mock.Object directly
+    ReportService sut = new(mockRepository.Object); // ❌ Violates env* indirection rule
+
+    sut.Generate();
+}
+```
+
 ---
 
 ## **17. Breaking the Rules**
@@ -864,4 +1432,38 @@ That said, most shortcuts trade short-term brevity for long-term ambiguity. The 
 - **Skipping `env*` indirection for mocks.** Passing `mockFoo.Object` straight into the SUT is faster than assigning it to `IFoo envFoo = mockFoo.Object;`, yet it couples the test to the mocking framework’s API and obscures which collaborator is being injected. Use the indirection whenever possible so the SYSTEM UNDER TEST section reads like a constructor call with domain types instead of mock plumbing.
 
 Humans occasionally break these rules to meet deadlines or to avoid ceremony in quick experiments. **AI tools should not**. Automated authors can generate well-structured tests with negligible effort, so they are expected to follow the full format unless a human reviewer explicitly approves an exception.
+
+✅ **Good Example:**
+```csharp
+[Fact]
+public void Test_StreamProcessor_AllowsInlineAssertion_ForDocumentedReason()
+{
+    // GIVEN: processing an empty stream should exit early
+    Stream givenStream = Stream.Null;
+
+    // SYSTEM UNDER TEST
+    StreamProcessor sut = new();
+
+    // WHEN
+    bool actualResult = sut.Process(givenStream);
+
+    // THEN
+    Assert.False(actualResult);
+}
+
+// NOTE: Breaking the EXPECTATIONS rule because the legacy API already returns bool and
+//       the team explicitly approved inline assertions for this hotfix scenario.
+```
+
+🚫 **Bad Example:**
+```csharp
+[Fact]
+public void Test_StreamProcessor_AllowsInlineAssertion_ForDocumentedReason()
+{
+    StreamProcessor sut = new();
+
+    // WHEN/THEN: assertion inlined with no explanation
+    Assert.False(sut.Process(Stream.Null)); // ❌ Rule broken with no documentation
+}
+```
 
