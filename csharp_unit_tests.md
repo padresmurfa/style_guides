@@ -121,6 +121,7 @@ Each test method follows a structured format, **separated by clear comments**:
 - Follow the Arrange → Act → Assert order unless a section is unnecessary; omit empty sections entirely.
 - Section comment headers should be full descriptive sentences (e.g. `// GIVEN: A valid context and wash code details`), not terse labels.
 - When a single section becomes long, divide it with additional human-readable sub-headers so readers can scan for intent quickly.
+- When a helper value lives entirely inside one section but helps construct a `given*`, `env*`, `expected*`, `actual*`, or other cross-section variable, name that helper with the `tmp*` prefix (e.g. `tmpSerializedOrder`). The `tmp*` prefix signals that the variable is a disposable staging value and prevents pollution of the more meaningful naming families.
 
 ### **5.1 Arrange**
 The Arrange stage gathers inputs, configures doubles, and exposes collaborators to the system under test. Keeping all preparation here prevents leakage of setup noise into later sections.
@@ -128,6 +129,7 @@ The Arrange stage gathers inputs, configures doubles, and exposes collaborators 
 #### **5.1.1 GIVEN**
 - Set up initial conditions and inputs.
 - Assign variables with the prefix `given`.
+- When a helper exists only to build or transform data for a `given*` variable, name it with the `tmp*` prefix so readers know it never leaves the GIVEN section.
 - When test fixtures are used, allocate them in this section.
 - **Test Fixture classes** should be named `Fixture*` and assigned to `given*` variables prior to use.
 - The GIVEN section should always be the first section in a test, unless there is nothing to define in GIVEN, in which case it should be omitted.
@@ -239,6 +241,7 @@ public async Task Test_SendEmail_CapturesRecipient()
 #### **5.1.3 MOCKING**
 - Define and configure **mock objects**.
 - Mock variables must be named `mock*`.
+- Helpers that only exist to configure mocks (for example, serialized payloads or argument lists) should use the `tmp*` prefix to make it clear they are temporary scaffolding.
 - **Use constructor injection for dependencies**, or use mocking frameworks like Moq.
 - The MOCKING section should occur before the SETUP section, or be omitted if no mocking is required. Under special circumstances it may be placed after SETUP.
 - **The MOCKING section must not be merged with any other section.**
@@ -539,6 +542,7 @@ public void Test_ServiceCallsDependency()
 - When constants or variables are needed in this section that are important for comprehending the test, declare them as `given*` variables instead.
 - SETUP should follow the preceding arrangement sections (GIVEN → CAPTURE → MOCKING). Omit intermediate sections when they are unnecessary.
 - SETUP should refer to `given*` variables, not `mock*` variables, except in rare occasions.
+- When SETUP needs staging variables (for example, constructing configuration objects before assigning them to `env*` variables), prefer the `tmp*` prefix to show the helpers do not escape the section.
 - Assign mock objects to real interface variables in SETUP, using the `env*` prefix (e.g., `envLogger = mockLogger.Object`). The `mock*` variables themselves may only be used in the SETUP and BEHAVIOR sections.
 - **The SETUP section must not be merged with any other section.**
 - If SETUP involves multiple distinct stages (e.g. reading fixtures, wiring dependencies, configuring environment), split it into multiple sub-sections with descriptive comments.
@@ -736,6 +740,7 @@ The Act stage performs the single behaviour under test. Keep it focused on invok
   - If later sections need to inspect additional outputs (e.g. side effects or mutated collaborators), assign them to their own `actual*` variables immediately after invocation.
 - If the test needs to use an `env*` value later, assign it to an `actual*` variable in WHEN and use that instead.
 - Move any values stored in `capture*` placeholders into appropriately named `actual*` variables before asserting on them in THEN or BEHAVIOR.
+- Transient calculations that help transform results before assigning to `actual*` variables may use the `tmp*` prefix to highlight that they do not leave the WHEN section.
 - **The WHEN section must not be merged with any other section.**
 - When using helpers such as `Assert.Throws`, treat the wrapper as part of WHEN. Store the resulting exception in an `actual*` variable and assert on it in THEN.
 
@@ -779,6 +784,7 @@ The Assert stage records expectations up front and verifies them explicitly. Sep
 #### **5.3.1 EXPECTATIONS**
 - Define expected values **before assertions**.
 - Assign expected values to `expected*` variables.
+- If you need helper calculations to build an expected value (for example, formatting a timestamp), compute them in-place with `tmp*` variables so the EXPECTATIONS section remains readable and clearly scoped.
 - Place EXPECTATIONS strictly after WHEN and before THEN.
 - This section should not refer to any `actual*` variables.
 - **The EXPECTATIONS section must not be merged with any other section.**
@@ -1245,16 +1251,19 @@ Documenting test intent with XML comments provides high-level context that compl
 - **Each test method should be commented with a human-readable explanation of what the test is exercising**
 - **Each test class should be commented with a human-readable explanation of what the test class is exercising**
 - **Use the XML comment syntax to comment test classes and test methods**
+- **Include the SUT, the triggering action (WHEN), and the expected behaviour or outcome (THEN/BEHAVIOR) in the XML summary for each test method** so readers can map the prose to the structured sections instantly.
+
+When in doubt, follow the structure “Verifies that `<SUT>` `<behaviour>` when `<trigger>`.” This framing keeps the prose synchronized with the SYSTEM UNDER TEST, WHEN, and BEHAVIOR/THEN sections without duplicating their exact wording.
 
 ✅ **Good Example:**
 ```csharp
 /// <summary>
-/// Verifies that the renewal service extends memberships by the configured duration.
+/// Verifies scenarios for <see cref="MembershipRenewalService"/>.
 /// </summary>
 public sealed class MembershipRenewalServiceTests
 {
     /// <summary>
-    /// Ensures that renewing an active membership extends its expiration date by one year.
+    /// Verifies that <see cref="MembershipRenewalService.Renew(Membership)"/> extends an active membership by one year when the renewal operation is invoked.
     /// </summary>
     [Fact]
     public void Test_Renew_ExtendsExpirationByOneYear()
@@ -1293,6 +1302,19 @@ public sealed class MembershipRenewalServiceTests
 Narrated section headers transform dense setup or verification code into self-explanatory stories that highlight intent and edge cases. Skipping these comments forces reviewers to reverse-engineer the reason behind each block, slowing code reviews and making it easier for subtle regressions to slip through.
 
 **As a best practice**, when tests have complex parts such as setting up mocks, creating complex 'given' objects, asserting on mock behavior, and so forth, it is recommended to split each such part into a section of its own, and comment what that section is doing. These headers act like a decryption key for the reader: each full-sentence comment explicitly states the intent of the code beneath it, so that even when the implementation is dense or unfamiliar, the reader can immediately understand _why_ a block exists rather than mentally reverse-engineering the setup from the statements themselves.
+
+Use the following patterns when writing section headers:
+
+- **GIVEN** headers describe the inputs or outside forces that drive the SUT. Phrase them in terms of the scenario rather than the mechanics (e.g., `// GIVEN: a library that contains at least one book`).
+- **MOCKING** headers should describe the state that the mock enforces in the underlying system and reference the related `given*` values (e.g., `// MOCKING: the givenUser exists in the user repository`).
+- **SETUP** headers should mirror the narrative from MOCKING, describing the environment exposure and referencing the `given*` values being wired up (e.g., `// SETUP: expose the givenUser repository to the SUT`).
+- **CAPTURE** headers explain what is being captured and from where (e.g., `// CAPTURE: the HTTP POST request body sent to the FooBar API`).
+- **SYSTEM UNDER TEST** should almost never need a header—your test name and XML comments should already identify the SUT. Only add a comment when the constructor or factory call needs clarification.
+- **WHEN** similarly rarely needs a header because the test name and XML comment should spell out the trigger. Only document it when the invocation is non-obvious.
+- **EXPECTATIONS** may be split into multiple subsections with their own headers when the assertions are complex; otherwise omit the header and let the section title speak for itself.
+- **THEN** should rarely include a header. When it does, treat it the same way as EXPECTATIONS and describe what outcome the assertions verify.
+- **LOGGING** sections should not normally have headers. Prefer to include the log message strings directly in this section and assert on them there rather than moving them to EXPECTATIONS.
+- **BEHAVIOR** should almost never need a header; the expected interaction should already be obvious from the test name and XML documentation.
 
 ✅ **Good Example:**
 ```csharp
