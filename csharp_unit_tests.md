@@ -62,7 +62,45 @@ Regions describe cohesive areas of responsibility inside a production class. Mir
 - Only introduce a `<RegionName>` segment when the production code exposes a `#region` with the same PascalCase name.
 - When a class contains multiple regions, create a separate test class per region, following the naming rules above and keeping each class in its own file.
 - Do not reuse a `<RegionName>` segment across unrelated production regions; each region must map to a single test class.
-- If a region contains helper methods that are not directly invoked by the public API, test the public surface that exercises them rather than testing the region helpers directly.
+- When a region contains helper methods that are not directly invoked by the public API, change those helpers from `private` to `internal` and test them directly. Configure the associated project so the test assembly can access internals rather than relying on metaprogramming to reach private members.
+
+### **3.1 Testing Helper Methods and Other Non-Public APIs**
+- Prefer testing helper methods directly by making them `internal` and annotating the production project so the test assembly can access those internals. This is easier to maintain and reason about than crafting reflection or dynamic proxies that simulate access to `private` members.
+- Update each relevant `.csproj` file with an `InternalsVisibleTo` entry so your tests can reference the newly `internal` helpers:
+  ```xml
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyCompany.Products.Services.Tests" />
+  </ItemGroup>
+  ```
+  You may alternatively add `[assembly: InternalsVisibleTo("MyCompany.Products.Services.Tests")]` to the production project when the codebase centralizes assembly metadata.
+- Avoid leaving helpers `private` and relying on metaprogramming wrappers just to execute them—promoting them to `internal` keeps their visibility tight while enabling straightforward tests.
+- **Protected methods cannot be made accessible via `InternalsVisibleTo`.** Exercise them by either:
+  - Using metaprogramming tools such as reflection to locate and invoke the protected member:
+    ```csharp
+    MethodInfo validate = typeof(Repository)
+        .GetMethod("Validate", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy)!;
+    validate.Invoke(repository, new object[] { candidate });
+    ```
+  - Creating a test double that inherits the production class and exposes a forwarding method that calls the protected helper:
+    ```csharp
+    private sealed class RepositoryDouble : Repository
+    {
+        public RepositoryDouble(IDatabase database) : base(database) { }
+
+        public void InvokeValidate(Order candidate) => Validate(candidate);
+    }
+
+    [Fact]
+    public void Test_Validate_RejectsCancelledOrders()
+    {
+        // GIVEN: a repository double and a cancelled order
+        RepositoryDouble givenRepository = new(database: new FakeDatabase());
+        Order givenOrder = Order.Cancelled("123");
+
+        // WHEN
+        Assert.Throws<InvalidOperationException>(() => givenRepository.InvokeValidate(givenOrder));
+    }
+    ```
 
 ✅ **Good Example:**
 ```
