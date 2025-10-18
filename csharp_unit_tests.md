@@ -77,9 +77,32 @@ Regions describe cohesive areas of responsibility inside a production class. Mir
 - **Protected methods cannot be made accessible via `InternalsVisibleTo`.** Exercise them by either:
   - Using metaprogramming tools such as reflection to locate and invoke the protected member:
     ```csharp
-    MethodInfo validate = typeof(Repository)
-        .GetMethod("Validate", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy)!;
-    validate.Invoke(repository, new object[] { candidate });
+    [Fact]
+    public void Validate_RejectsCancelledOrders()
+    {
+        // GIVEN: a cancelled order candidate
+        Order givenCancelledOrder = Order.Cancelled("123");
+
+        // SETUP: capture the protected method while keeping the act phase clean
+        var envValidateRepository = typeof(Repository)
+            .GetMethod("Validate", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy)!;
+
+        var envInvokeValidate = (Repository repository, Order candidate) =>
+        {
+            _ = envValidateRepository.Invoke(repository, new object[] { candidate });
+        };
+
+        var envRepository = new Repository(database: new FakeDatabase());
+
+        // SYSTEM UNDER TEST
+        Action<Order> sut = candidate => envInvokeValidate(envRepository, candidate);
+
+        // WHEN: invoking the protected method through the captured delegate
+        InvalidOperationException actualException = Assert.Throws<InvalidOperationException>(() => sut(givenCancelledOrder));
+
+        // THEN: the protected method rejects cancelled orders
+        Assert.IsType<InvalidOperationException>(actualException);
+    }
     ```
   - Creating a test double that inherits the production class and exposes a forwarding method that calls the protected helper:
     ```csharp
@@ -279,6 +302,7 @@ public async Task Test_SendEmail_CapturesRecipient()
 #### **5.1.3 MOCKING**
 - Define and configure **mock objects**.
 - Mock variables must be named `mock*`.
+- Prefer `var` when the initializer makes the mocked type obvious; explicit types are only necessary when inference would hide important details.
 - Helpers that only exist to configure mocks (for example, serialized payloads or argument lists) should use the `tmp*` prefix to make it clear they are temporary scaffolding.
 - **Use constructor injection for dependencies**, or use mocking frameworks like Moq.
 - The MOCKING section should occur before the SETUP section, or be omitted if no mocking is required. Under special circumstances it may be placed after SETUP.
@@ -577,6 +601,7 @@ public void Test_ServiceCallsDependency()
 #### **5.1.4 SETUP**
 - Perform all test initialization that prepares the non-mocked environment (e.g., creating `HttpContext`, configuring dependency injection, and setting up request parameters).
 - Variables created in this section should be prefixed with `env*` (e.g. `envHttpContext`, `envActionContext`).
+- Prefer `var` in SETUP when the assigned collaborator or fixture is obvious from the right-hand side; reserve explicit types for cases where inference would obscure intent.
 - When constants or variables are needed in this section that are important for comprehending the test, declare them as `given*` variables instead.
 - SETUP should follow the preceding arrangement sections (GIVEN → CAPTURE → MOCKING). Omit intermediate sections when they are unnecessary.
 - SETUP should refer to `given*` variables, not `mock*` variables, except in rare occasions.
