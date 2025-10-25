@@ -12,6 +12,19 @@ These practices may be too detailed for human-written tests but serve as an exce
 
 ---
 
+## **How to Use This Guide**
+
+This document intentionally leans toward exhaustive structure so that large, generated suites stay readable. When adopting the rules in day-to-day development, keep the following guardrails in mind:
+
+- **Optimise for clarity first.** Reach for the full section taxonomy (GIVEN/CAPTURE/MOCKING/…) when it helps the reader track complex flows. For lightweight tests, a slimmed-down Arrange → Act → Assert structure with descriptive comments is acceptable as long as intent stays obvious.
+- **Prefer consistency within a file over mechanical adherence.** If an existing test class uses concise comments or omits CAPTURE entirely, mirror that local style instead of introducing a competing pattern in the same file.
+- **Document deviations.** When you deliberately skip a section or rely on inline literals for trivial assertions, leave a short comment that explains the choice. Future maintainers should never have to guess whether a missing section was intentional or an oversight.
+- **Revisit guidance during reviews.** Treat this guide as a living document—if a rule obstructs readability for a particular scenario, capture the exception in code review and feed the learning back into the guide.
+
+These pragmatic allowances keep the style guide approachable while preserving the deliberate naming and structure that make the tests easy to scan.
+
+---
+
 ## **1. Test Namespace Organization**
 Consistent namespaces make it immediately obvious where a test lives relative to the production code, so reviewers can locate the subject under test without opening multiple files. Misaligned namespaces cause confusion when navigating between source and tests, especially in IDEs that rely on namespace matching for discovery.
 - Every test file must declare a namespace that mirrors the production namespace and appends a `.Tests` suffix (e.g. `MyCompany.Products.Services` → `MyCompany.Products.Services.Tests`).
@@ -153,7 +166,8 @@ Clear method names document the behavior under test and the expected outcome, wh
 - Favor verbosity over brevity—short names rarely communicate enough context to make the test self-documenting.
 - Test method names must describe the **specific branch of execution** they cover (e.g. `Test_Foo_ReturnsBar_WhenSuccessful`), not merely state that something "works".
 - **Separate tests** into distinct methods rather than combining multiple test cases.
-- **Avoid parameterized tests** unless they significantly improve clarity.
+- **Use parameterized tests judiciously**. They shine when exercising the same behaviour across multiple datasets; prefer
+  explicit individual tests when each case needs unique setup or assertions.
 - Any component found in the test class name **must NOT be duplicated in the test method name**.
 
 ✅ **Good Example:**
@@ -177,6 +191,8 @@ public void Test_MultipleCases() // ❌ Tests multiple things at once
 Standardized sections carve complex tests into digestible steps, making it easier to see how inputs flow through mocks and the system under test. Without this structure tests devolve into monolithic blocks where intent, setup, and verification intermingle, obscuring bugs and encouraging brittle copy-paste patterns. The ordering rules below are intentionally strong to build reliable habits—refer to [**Section 17. Breaking the Rules**](#-17-breaking-the-rules) for guidance on the rare cases where deviating is justified.
 
 The high-level **Arrange–Act–Assert (AAA)** pattern is the conceptual root of this style guide: *Arrange* prepares the world, *Act* exercises the behaviour, and *Assert* verifies the outcome. AAA is intentionally coarse-grained—perfect for short, simple unit tests—but it starts to creak once a scenario grows beyond a handful of lines. That is where the richer sectioning described below shines. You can adopt only the headline sections for straightforward tests, add descriptive comment headers as complexity grows, and even split an individual section into multiple focused subsections (e.g., `// MOCKING: the database contains the given record` followed by `// MOCKING: the accounting API rejects the record`) when the test demands it.
+
+When brevity clearly communicates intent (for example, asserting a pure function or mapping with no collaborators), a compact test that sticks to a single `// ARRANGE`, `// ACT`, `// ASSERT` progression is acceptable. Treat the detailed sections as building blocks—pull them in once the setup stops fitting on a screen or when additional naming would make the control flow easier to reason about.
 
 Each test method follows a structured format, **separated by clear comments**:
 - Follow the Arrange → Act → Assert order unless a section is unnecessary; omit empty sections entirely.
@@ -847,6 +863,9 @@ The Assert stage records expectations up front and verifies them explicitly. Sep
 #### **5.3.1 EXPECTATIONS**
 - Define expected values **before assertions**.
 - Assign expected values to `expected*` variables.
+- When the expectation is a self-explanatory constant (e.g., `true`, `null`, or an enum member with an obvious name), you may
+  assert directly against the literal as long as the comment above the assertion communicates intent. Introduce an
+  `expected*` variable when the value needs derivation or when multiple assertions share it.
 - If you need helper calculations to build an expected value (for example, formatting a timestamp), compute them in-place with `tmp*` variables so the EXPECTATIONS section remains readable and clearly scoped.
 - Place EXPECTATIONS strictly after WHEN and before THEN.
 - This section should not refer to any `actual*` variables.
@@ -890,7 +909,8 @@ public void Test_Calculator_AddsNumbers()
 
 #### **5.3.2 THEN**
 - Perform **assertions** comparing actual results to expected values.
-- **Never assert against literals**—always use `expected*` variables.
+- **Prefer asserting against `expected*` variables.** Inline literals are acceptable for trivial expectations that are
+  immediately obvious to the reader; favour named variables whenever the value is derived, reused, or benefits from explanation.
 - **The THEN section must not be merged with any other section.**
 
 ✅ **Good Example:**
@@ -982,26 +1002,29 @@ public void Test_Handler_EmitsInformationLog()
 
 ✅ **Good Example:**
 ```csharp
-[Test]
-public void Test_ProcessData_ReturnsCorrectValue()
+[Fact]
+public void Test_ProcessData_PersistsRecord()
 {
     // GIVEN
-    var givenInput = "sample";
+    Payload givenPayload = Fixtures.Payload();
+
+    // MOCKING: capture the collaborator interaction
+    Mock<IDataGateway> mockGateway = new(MockBehavior.Strict);
+    mockGateway
+        .Setup(gateway => gateway.Save(givenPayload))
+        .Verifiable();
+
+    // SETUP
+    IDataGateway envGateway = mockGateway.Object;
 
     // SYSTEM UNDER TEST
-    var sut = new DataService();
+    DataService sut = new(envGateway);
 
     // WHEN
-    var actualResult = sut.ProcessData(givenInput);
-    var actualSideEffect = Foo.Bar();
+    sut.Process(givenPayload);
 
-    // EXPECTATIONS
-    var expectedResult = "processed_sample";
-    var expectedSideEffect = "fubar";
-
-    // THEN
-    Assert.AreEqual(expectedResult, actualResult);
-    Assert.AreEqual(expectedSideEffect, actualSideEffect);
+    // BEHAVIOR
+    mockGateway.Verify(gateway => gateway.Save(givenPayload), Times.Once);
 }
 ```
 
@@ -1023,14 +1046,10 @@ public void Test_ProcessData_ReturnsCorrectValue()
 Strict naming patterns for expected and actual values highlight the difference between inputs, outputs, and verifications, which speeds up failure analysis. Mixing literals and setup variables inside assertions hides intent, makes diffs noisy, and increases the chance of asserting against the wrong data.
 - **Expected values** always assign input values (from the GIVEN section) to `expected*` variables in the EXPECTATIONS section if you intend to assert on them in the THEN or BEHAVIOR sections.
 - **Actual results** all actual results must be assigned to `actual*` variables in the WHEN section.
-- **Never assert against literals directly** — use `expected*` variables.
-- **Never assert against `given*` variables directly** — assign them to`expected*` variables in the EXPECTATIONS section and use those.
-- **Never assert against `env*` variables directly** — assign them to`actual*` variables exclusively in the WHEN section and use those.
-- **Never assert against `mock*` variables directly in the THEN section** — assign them to`expected*` variables in the EXPECTATIONS section and use those.
-- **It is acceptable to assert against `mock*` variables directly in the BEHAVIOR section** .
-- To reiterate: **Never assert directly against given* or env* variable** — always use the `expected*` or `actual*` variables in the THEN section.
-- To reiterate: **This also holds true for mocks** — always use the `expected*` or `actual*` variables in the BEHAVIOR section when asserting on the behavior of mock objects, which must be named `mock*`.
-- To reiterate once more: assertions should never ever ever refer to `given*` or `env*` values, and should only refer to `mock*` variables in the BEHAVIOR section.
+- **Prefer named variables over inline literals**. Literal assertions are fine when the value is self-explanatory (`true`, `HttpStatusCode.NotFound`, etc.); otherwise, promote the value to an `expected*` variable so the assertion reads fluently.
+- **Avoid asserting directly against `given*` variables.** Promote them to `expected*` variables so the THEN section reads like “expected vs. actual.”
+- **Avoid asserting directly against `env*` collaborators.** Move any observed state into an `actual*` variable before verifying it.
+- **Keep mock verification inside BEHAVIOR.** Use `expected*` values only when you need to compare data returned from a mock; interaction verification should rely on `mock.Verify(...)` calls instead.
 
 ✅ **Good Example:**
 ```csharp
